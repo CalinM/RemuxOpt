@@ -1,7 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-
-namespace RemuxOpt
+﻿namespace RemuxOpt
 {
     public class Languages
     {
@@ -520,18 +517,6 @@ namespace RemuxOpt
         public string Abr2 { get; set; }
         public string Abr3a { get; set; }
         public string Abr3b { get; set; }
-
-        public string Code
-        {
-            get
-            {
-                if (!string.IsNullOrEmpty(Abr2)) return Abr2;
-                if (!string.IsNullOrEmpty(Abr3a)) return Abr3a;
-                if (!string.IsNullOrEmpty(Abr3b)) return Abr3b;
-
-                return Name;
-            }
-        }
 
         public LanguageObject()
         {

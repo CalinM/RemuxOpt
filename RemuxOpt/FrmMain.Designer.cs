@@ -29,6 +29,7 @@
         private void InitializeComponent()
         {
             pParameters = new Panel();
+            chkRemoveFileTitle = new CheckBox();
             bRemux = new Button();
             lbFFprobeVersion = new Label();
             lbMkvVersion = new Label();
@@ -68,6 +69,7 @@
             // 
             // pParameters
             // 
+            pParameters.Controls.Add(chkRemoveFileTitle);
             pParameters.Controls.Add(bRemux);
             pParameters.Controls.Add(lbFFprobeVersion);
             pParameters.Controls.Add(lbMkvVersion);
@@ -89,6 +91,18 @@
             pParameters.Name = "pParameters";
             pParameters.Size = new Size(440, 759);
             pParameters.TabIndex = 0;
+            // 
+            // chkRemoveFileTitle
+            // 
+            chkRemoveFileTitle.AutoSize = true;
+            chkRemoveFileTitle.Checked = true;
+            chkRemoveFileTitle.CheckState = CheckState.Checked;
+            chkRemoveFileTitle.Location = new Point(16, 657);
+            chkRemoveFileTitle.Name = "chkRemoveFileTitle";
+            chkRemoveFileTitle.Size = new Size(172, 19);
+            chkRemoveFileTitle.TabIndex = 47;
+            chkRemoveFileTitle.Text = "Remove container (file) title";
+            chkRemoveFileTitle.UseVisualStyleBackColor = true;
             // 
             // bRemux
             // 
@@ -327,7 +341,7 @@
             lbDragFolderHere.Name = "lbDragFolderHere";
             lbDragFolderHere.Size = new Size(832, 725);
             lbDragFolderHere.TabIndex = 3;
-            lbDragFolderHere.Text = "Drag a folder here ...";
+            lbDragFolderHere.Text = "Drag a folder (or files) here ...";
             lbDragFolderHere.TextAlign = ContentAlignment.MiddleCenter;
             // 
             // tpTextView
@@ -385,7 +399,7 @@
             Controls.Add(pFiles);
             Controls.Add(pParameters);
             Name = "FrmMain";
-            Text = "Form1";
+            Text = "RemuxOpt";
             FormClosing += FrmMain_FormClosing;
             pParameters.ResumeLayout(false);
             pParameters.PerformLayout();
@@ -432,5 +446,6 @@
         private Label lbDragFolderHere;
         private TabPage tpOutput;
         private TextBox tbOutput;
+        private CheckBox chkRemoveFileTitle;
     }
 }

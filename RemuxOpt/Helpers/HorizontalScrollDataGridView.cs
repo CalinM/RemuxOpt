@@ -20,6 +20,24 @@ namespace RemuxOpt
             }
         }
 
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            // Check if the Shift key is pressed: horizontal scrolling
+            if ((ModifierKeys & Keys.Shift) == Keys.Shift)
+            {
+                // Default vertical scrolling
+                base.OnMouseWheel(e);
+            }
+            else
+            {
+                // Scroll horizontally
+                int scrollAmount = e.Delta > 0 ? -1 : 1;
+                int newOffset = this.HorizontalScrollingOffset + scrollAmount * 30; // Adjust multiplier if needed
+                newOffset = Math.Max(0, newOffset);
+                this.HorizontalScrollingOffset = newOffset;
+            }
+        }
+
         public HorizontalScrollDataGridView()
         {
             this.DoubleBuffered = true;
@@ -49,7 +67,7 @@ namespace RemuxOpt
                 Size = new Size(15, 15),
                 BackColor = Color.Transparent,
                 Padding = new Padding(0),
-                Margin = new Padding(0),
+                Margin = new Padding(),
                 Text = ""
             };
 

@@ -20,10 +20,9 @@ namespace RemuxOpt
             FormClosing += FrmMain_FormClosing;
 
             InitBackgroundWorker();
-            InitializeGrid();
-            //InitializeFilesListView();
-            SetupTooltips();
-            SetupListViews();
+            InitGrid();
+            InitTooltips();
+            InitListViews();
 
             chkEmptyVideoTitle.CheckedChanged += CbEmptyVideoTitle_CheckedChanged;
             chkEmptyVideoTitle.Checked = true; // Default to empty video title
@@ -38,16 +37,26 @@ namespace RemuxOpt
                 lbDragFolderHere.Visible = false;
 
                 var paths = (string[])e.Data.GetData(DataFormats.FileDrop);
-                var files = paths.SelectMany(path =>
+                var dropppedFiles = paths.SelectMany(path =>
                     Directory.Exists(path) ?
                         Directory.GetFiles(path, "*.mkv", SearchOption.AllDirectories)
                         .Concat(Directory.GetFiles(path, "*.mp4", SearchOption.AllDirectories)) :
-                        [path]).ToArray();
+                        [path]).ToList();
 
                 if (!_backgroundWorker.IsBusy)
                 {
                     pProgress.Visible = true;
-                    _backgroundWorker.RunWorkerAsync(files);
+
+                    var context = new BackgroundWorkerContext
+                    {
+                        TaskType = BackgroundTaskType.LoadDroppedFiles,
+                        Payload = new WorkerPayload
+                        {
+                            Files = dropppedFiles
+                        }
+                    };
+
+                    _backgroundWorker.RunWorkerAsync(context);
                 }
                 else
                 {
@@ -57,14 +66,57 @@ namespace RemuxOpt
 
             bRemux.Click += (s, e) =>
             {
-                RemuxSelectedFiles();
+                var selectedFiles = GetCheckedFilenames();
+
+                if (selectedFiles.Count == 0)
+                {
+                    MessageBox.Show("No files selected for remuxing.", "No Selection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                if (_backgroundWorker.IsBusy)
+                {
+                    MessageBox.Show("Another operation is currently running. Please wait.", "Busy", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                pProgress.Visible = true;
+
+                var remuxHelper = new MkvRemuxHelper
+                {
+                    UseAutoTitle = chkAutoTitleForAudioTrack.Checked,
+                    RemoveAttachments = chkRemoveAttachments.Checked,
+                    RemoveForcedFlags = chkRemoveAttachments.Checked,
+                    RermoveFileTitle = chkRemoveFileTitle.Checked,
+                    AudioLanguageOrder = lvAudioTracks.Items.Cast<ListViewItem>()
+                        .Select(item => item.SubItems[1].Text)
+                        .ToList(),
+                    SubtitleLanguageOrder = lvSubtitleTracks.Items.Cast<ListViewItem>()
+                        .Select(item => item.SubItems[1].Text)
+                        .ToList()
+                };
+
+                tbOutput.Clear();
+                progressBar.Value = 0;
+
+                var context = new BackgroundWorkerContext
+                {
+                    TaskType = BackgroundTaskType.RemuxSelectedFiles,
+                    Payload = new WorkerPayload
+                    {
+                        Files = selectedFiles,
+                        RemuxHelper = remuxHelper
+                    }
+                };
+
+                _backgroundWorker.RunWorkerAsync(context);
             };
         }
 
-        private void InitializeGrid()
+        private void InitGrid()
         {
             _dataGridViewResults = new HorizontalScrollDataGridView
-            {
+            {                
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 BackgroundColor = SystemColors.Window,
                 AllowUserToAddRows = false,
@@ -107,22 +159,33 @@ namespace RemuxOpt
 
         private void BackgroundWorker_DoWork(object sender, DoWorkEventArgs e)
         {
-            var files = (string[])e.Argument;
-            e.Result = LoadMkvFileInfosAsync(files, _backgroundWorker, e).GetAwaiter().GetResult();
+            var context = (BackgroundWorkerContext)e.Argument;
+
+            switch (context.TaskType)
+            {
+                case BackgroundTaskType.LoadDroppedFiles:
+                    e.Result = LoadMkvFileInfosAsync(context.Payload.Files, _backgroundWorker, e).GetAwaiter().GetResult();
+                    break;
+
+                case BackgroundTaskType.RemuxSelectedFiles:
+                    e.Result = RunRemuxProcess(context);
+                    break;
+            }
         }
 
-        private static async Task<List<MkvFileInfo>> LoadMkvFileInfosAsync(string[] files, BackgroundWorker worker, DoWorkEventArgs e)
+        private static async Task<WorkerResult> LoadMkvFileInfosAsync(List<string> files, BackgroundWorker worker, DoWorkEventArgs e)
         {
-            List<MkvFileInfo> results = [];
+            var workerResult = new WorkerResult
+            {
+                TaskType = BackgroundTaskType.LoadDroppedFiles
+            };
 
-            int total = files.Length;
-
-            for (int i = 0; i < total; i++)
+            for (int i = 0; i < files.Count; i++)
             {
                 if (worker.CancellationPending)
                 {
                     e.Cancel = true;
-                    return results;
+                    return workerResult;
                 }
 
                 string file = files[i];
@@ -130,10 +193,15 @@ namespace RemuxOpt
                 try
                 {
                     var info = await MkvMetadataExtractor.ExtractInfoAsync(file);
-                    results.Add(info);
+                    workerResult.Files.Add(info);
 
-                    int percent = (int)((i + 1) / (double)total * 100);
-                    worker.ReportProgress(percent, Path.GetFileName(file));
+                    int percent = (int)((i + 1) / (double)files.Count * 100);
+
+                    var progressMessage = new ProgressMessage(
+                        $"Processing: {Path.GetFileName(Path.GetFileName(file))}",
+                        string.Empty
+                    );
+                    worker.ReportProgress(percent, progressMessage);
                 }
                 catch (Exception ex)
                 {
@@ -141,16 +209,17 @@ namespace RemuxOpt
                 }
             }
 
-            return results;
+            return workerResult;
         }
 
         private void BackgroundWorker_ProgressChanged(object sender, ProgressChangedEventArgs e)
         {
             progressBar.Value = e.ProgressPercentage;
 
-            if (e.UserState is string filename)
+            if (e.UserState is ProgressMessage msg)
             {
-                progressLabel.Text = filename;
+                progressLabel.Text = msg.StatusText;
+                tbOutput.Text = msg.RemuxLog;
             }
         }
 
@@ -168,8 +237,27 @@ namespace RemuxOpt
             }
             else
             {
-                PopulateGrid((List<MkvFileInfo>)e.Result);
-                BuildTextView((List<MkvFileInfo>)e.Result);
+                if (e.Result is WorkerResult workerResult)
+                {
+                    switch (workerResult.TaskType)
+                    {
+                        case BackgroundTaskType.LoadDroppedFiles:
+                            if (workerResult.Files.Count == 0)
+                            {
+                                MessageBox.Show("No files found or processed.", "No Results", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            }
+                            else
+                            {
+                                PopulateGrid(workerResult.Files);
+                                BuildTextView(workerResult.Files);
+                            }
+
+                            break;
+                        case BackgroundTaskType.RemuxSelectedFiles:
+                            MessageBox.Show(this, "Done!", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            break;
+                    }
+                }
             }
 
             progressBar.Value = 0;
@@ -189,10 +277,11 @@ namespace RemuxOpt
             var checkCol = new DataGridViewCheckBoxColumn
             {
                 Name = "Selected",
-                HeaderText = "✓",      // You can write "✓" or "Select" if you like
-                Width = 30,
+                HeaderText = " ",      // You can write "✓" or "Select" if you like
+                Width = 32,
                 Frozen = true,
-                ReadOnly = false
+                ReadOnly = false,
+                Resizable = DataGridViewTriState.False
             };
 
             _dataGridViewResults.Columns.Insert(0, checkCol);
@@ -337,7 +426,7 @@ namespace RemuxOpt
         private void FrmMain_Load(object? sender, EventArgs e)
         {
             LoadFormSettings(this);
-            CheckToolsInPath();
+            bRemux.Enabled = CheckToolsInPath();
         }
 
         private static void SaveFormSettings(Form mainForm)
@@ -381,8 +470,10 @@ namespace RemuxOpt
             }
         }
 
-        private void CheckToolsInPath()
+        private bool CheckToolsInPath()
         {
+            var result = true;
+
             var exePath = GetExecutablePath("mkvmerge.exe");
 
             if (!string.IsNullOrEmpty(exePath))
@@ -394,8 +485,8 @@ namespace RemuxOpt
             {
                 lbMkvVersion.Text = $"mkvmerge not found in PATH!";
                 lbMkvVersion.ForeColor = Color.Red;
+                result = false;
             }
-
 
             exePath = GetExecutablePath("ffprobe.exe");
 
@@ -426,7 +517,10 @@ namespace RemuxOpt
             {
                 lbFFprobeVersion.Text = $"ffprobe not found in PATH!";
                 lbFFprobeVersion.ForeColor = Color.Red;
+                result = false;
             }
+
+            return result;
         }
 
         private static string GetExecutablePath(string executableName)
@@ -438,7 +532,7 @@ namespace RemuxOpt
                 .FirstOrDefault(File.Exists);
         }
 
-        private void SetupTooltips()
+        private void InitTooltips()
         {
             var toolTip = new ToolTip
             {
@@ -452,11 +546,12 @@ namespace RemuxOpt
             // Assign tooltips to controls
             toolTip.SetToolTip(chkAutoTitleForAudioTrack, $"If checked, the title track is built from the track technical specs!{Environment.NewLine}{Environment.NewLine}<Language-name> <channels> @ <bitrate>");
             toolTip.SetToolTip(chkPreserveSubtitlesTrackTitles, "If checked, the 'Forced', 'SDH', 'CC' values will be preserved!");
+            toolTip.SetToolTip(_dataGridViewResults, "Use SHIFT key modifier to scroll vertically using the mouse wheel!");
         }
 
         #region ListViews Initialization and Event Handlers
 
-        private void SetupListViews()
+        private void InitListViews()
         {
             InitListView(lvAudioTracks);
             InitListView(lvSubtitleTracks);
@@ -552,8 +647,6 @@ namespace RemuxOpt
 
             SaveListToXml();
         }
-
-        //private const int DraggedItemMargin = 2;
 
         private void LvGeneric_DragOver(object sender, DragEventArgs e)
         {
@@ -755,8 +848,6 @@ namespace RemuxOpt
             doc.Save("config.xml"); // Save near the EXE
         }
 
-
-
         private List<string> GetCheckedFilenames()
         {
             return _dataGridViewResults.Rows
@@ -766,56 +857,97 @@ namespace RemuxOpt
                 .ToList();
         }
 
-        private void RemuxSelectedFiles()
+        private WorkerResult RunRemuxProcess(BackgroundWorkerContext context)
         {
-            var selectedFiles = GetCheckedFilenames();
+            var workerResult = new WorkerResult();
 
-            if (selectedFiles.Count == 0)
+            if (context.Payload is not WorkerPayload wp)
             {
-                MessageBox.Show("No files selected for remuxing.", "No Selection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                workerResult.TaskType = BackgroundTaskType.Unknown;
+                return workerResult;
             }
 
-            var remuxHelper = new MkvRemuxHelper
-            {
-                UseAutoTitle = chkAutoTitleForAudioTrack.Checked,
-                RemoveAttachments = chkRemoveAttachments.Checked,
-                RemoveForcedFlags = chkRemoveAttachments.Checked,
+            workerResult.TaskType = BackgroundTaskType.RemuxSelectedFiles;
 
-                AudioLanguageOrder = lvAudioTracks.Items.Cast<ListViewItem>()
-                    .Select(item => item.SubItems[1].Text)
-                    .ToList(),
+            var selectedFiles = wp.Files;
+            var remuxHelper = wp.RemuxHelper;
 
-                SubtitleLanguageOrder = lvSubtitleTracks.Items.Cast<ListViewItem>()
-                    .Select(item => item.SubItems[1].Text)
-                    .ToList()
-            };
-
-            tbOutput.Clear();
             var sb = new StringBuilder();
 
-            foreach (var file in selectedFiles)
+            for (int i = 0; i < selectedFiles.Count; i++)
             {
+                string inputFile = selectedFiles[i];
                 string outputFile = Path.Combine(
-                    Path.GetDirectoryName(file)!,
-                    Path.GetFileNameWithoutExtension(file) + ".remuxed.mkv"
+                    Path.GetDirectoryName(inputFile)!,
+                    Path.GetFileNameWithoutExtension(inputFile) + ".remuxed.mkv"
                 );
 
                 sb.AppendLine("Input file:");
-                sb.AppendLine(file);
+                sb.AppendLine(inputFile);
                 sb.AppendLine("Output file:");
                 sb.AppendLine(outputFile);
 
-                string args = remuxHelper.BuildMkvMergeArgs(file, outputFile);
-                sb.AppendLine("Arguments:");
-                sb.AppendLine(args);
-                sb.AppendLine();
+                var progressMessage = new ProgressMessage(
+                    $"Processing: {Path.GetFileName(inputFile)}",
+                    sb.ToString()
+                );
 
-                remuxHelper.RunRemux(args);
+                _backgroundWorker.ReportProgress(
+                     Math.Min(100, (int)(((i + 1) / (float)selectedFiles.Count) * 100)),
+                    progressMessage
+                );
 
-                tbOutput.Text = sb.ToString();
+                try
+                {
+                    string args = remuxHelper.BuildMkvMergeArgs(inputFile, outputFile);
+
+                    sb.AppendLine("Arguments:");
+                    sb.AppendLine(args);
+                    sb.AppendLine();
+
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = remuxHelper.MkvMergePath,
+                        Arguments = args,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+
+                    using var process = Process.Start(psi);
+                    string stdout = process.StandardOutput.ReadToEnd();
+                    string stderr = process.StandardError.ReadToEnd();
+                    process.WaitForExit();
+
+                    if (process.ExitCode != 0)
+                    {
+                        sb.AppendLine($"[ERROR] mkvmerge exited with code {process.ExitCode}");
+                        sb.AppendLine(stderr);
+                    }
+                    else
+                    {
+                        sb.AppendLine("Remux completed successfully.");
+                        if (!string.IsNullOrWhiteSpace(stdout))
+                            sb.AppendLine(stdout);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    sb.AppendLine($"[EXCEPTION] {ex.Message}");
+                }
+
+                sb.AppendLine(new string('-', 60));
+
+                progressMessage.RemuxLog = sb.ToString();
+
+                _backgroundWorker.ReportProgress(
+                     Math.Min(100, (int)(((i + 1) / (float)selectedFiles.Count) * 100)),
+                    progressMessage
+                );
             }
 
+            return workerResult;
         }
     }
 }
