@@ -126,7 +126,11 @@ namespace RemuxOpt
             }
 
             // Audio tracks args
-            if (orderedAudio.Count > 0)
+            if (AudioLanguageOrder.Count == 0)
+            {
+                args.Add("--no-audio");
+            }
+            else if (orderedAudio.Count > 0)
             {
                 args.Add($"--audio-tracks {string.Join(',', orderedAudio.Select(x => x.id))}");
                 for (int i = 0; i < orderedAudio.Count; i++)
@@ -162,7 +166,11 @@ namespace RemuxOpt
             }
 
             // Subtitle tracks args
-            if (orderedSubtitles.Count > 0)
+            if (SubtitleLanguageOrder.Count == 0)
+            {
+                args.Add("--no-subtitles");
+            }
+            else if (orderedSubtitles.Count > 0)
             {
                 args.Add($"--subtitle-tracks {string.Join(',', orderedSubtitles.Select(x => x.id))}");
                 foreach (var (trackId, lang) in orderedSubtitles)

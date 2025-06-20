@@ -66,17 +66,23 @@ namespace RemuxOpt
 
             bRemux.Click += (s, e) =>
             {
+                if (lvAudioTracks.Items.Count == 0 && MsgBox.Show(this, "There are no audio tracks languages configured, and this will remove all audio tracks from the remuxed files(s). Are you sure you want to continue?", "Warning",
+                        MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.No)
+                {
+                    return;
+                }
+
                 var selectedFiles = GetCheckedFilenames();
 
                 if (selectedFiles.Count == 0)
                 {
-                    MessageBox.Show("No files selected for remuxing.", "No Selection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
+                    MsgBox.Show(this, "No files selected for remuxing.", "No Selection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;;
                 }
 
                 if (_backgroundWorker.IsBusy)
                 {
-                    MessageBox.Show("Another operation is currently running. Please wait.", "Busy", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MsgBox.Show(this, "Another operation is currently running. Please wait.", "Busy", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
@@ -173,7 +179,7 @@ namespace RemuxOpt
             }
         }
 
-        private static async Task<WorkerResult> LoadMkvFileInfosAsync(List<string> files, BackgroundWorker worker, DoWorkEventArgs e)
+        private async Task<WorkerResult> LoadMkvFileInfosAsync(List<string> files, BackgroundWorker worker, DoWorkEventArgs e)
         {
             var workerResult = new WorkerResult
             {
@@ -205,7 +211,7 @@ namespace RemuxOpt
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Failed to read {file}: {ex.Message}");
+                    MsgBox.Show(this, $"Failed to read {file}: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
 
@@ -229,11 +235,11 @@ namespace RemuxOpt
 
             if (e.Cancelled)
             {
-                MessageBox.Show("Operation was cancelled.", "Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MsgBox.Show(this, "Operation was cancelled.", "Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             else if (e.Error != null)
             {
-                MessageBox.Show("Error: " + e.Error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MsgBox.Show(this, "Error: " + e.Error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             else
             {
@@ -244,7 +250,7 @@ namespace RemuxOpt
                         case BackgroundTaskType.LoadDroppedFiles:
                             if (workerResult.Files.Count == 0)
                             {
-                                MessageBox.Show("No files found or processed.", "No Results", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                                MsgBox.Show(this, "No files found or processed.", "No Results", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             }
                             else
                             {
@@ -254,7 +260,7 @@ namespace RemuxOpt
 
                             break;
                         case BackgroundTaskType.RemuxSelectedFiles:
-                            MessageBox.Show(this, "Done!", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            MsgBox.ShowAutoClose(this, "Done!", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information, MessageBoxDefaultButton.Button1, timeoutSeconds: 5);
                             break;
                     }
                 }
