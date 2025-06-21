@@ -26,7 +26,7 @@ namespace RemuxOpt
                 var title = props?["track_name"]?.ToString();
                 var channels = props?["audio_channels"]?.GetValue<int>() ?? 0;
 
-                result.AudioTracks.Add(new AudioTrack
+                result.AudioTracks.Add(new AudioTrackInfo
                 {
                     Language = lang,
                     Title = title,
@@ -58,8 +58,7 @@ namespace RemuxOpt
 
             var mkvBaseName = Path.GetFileNameWithoutExtension(filePath);
             var folder = Path.GetDirectoryName(filePath);
-
-            var audioExtensions = new[] { ".aac", ".ac3", ".dts", ".mka" };
+            
             result.ExternalAudioFiles = FindExternalAudioTracks(folder, mkvBaseName);                
 
             // Subtitles
@@ -91,7 +90,7 @@ namespace RemuxOpt
 
         private List<ExternalAudioTrack> FindExternalAudioTracks(string folder, string baseName)
         {
-            var audioExtensions = new[] { ".aac", ".ac3", ".dts", ".mka" };
+            var audioExtensions = new[] { ".aac", ".ac3", ".dts", ".mka", ".eac3" };
 
             return Directory.EnumerateFiles(folder)
                 .Where(path =>

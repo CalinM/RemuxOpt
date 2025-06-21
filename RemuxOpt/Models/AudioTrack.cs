@@ -1,6 +1,6 @@
 ﻿namespace RemuxOpt
 {
-    public class AudioTrack
+    public class AudioTrack1
     {
         public string Language { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;

@@ -38,28 +38,6 @@ namespace RemuxOpt
 
                 var paths = (string[])e.Data.GetData(DataFormats.FileDrop);
 
-                //var droppedFiles = paths.SelectMany(path =>
-                //{
-                //    if (Directory.Exists(path))
-                //    {
-                //        return Directory.GetFiles(path, "*.*", SearchOption.AllDirectories)
-                //            .Where(f =>
-                //                Path.GetExtension(f).Equals(".mkv", StringComparison.OrdinalIgnoreCase) ||
-                //                Path.GetExtension(f).Equals(".mp4", StringComparison.OrdinalIgnoreCase));
-                //    }
-                //    else if (File.Exists(path) &&
-                //        (Path.GetExtension(path).Equals(".mkv", StringComparison.OrdinalIgnoreCase) ||
-                //         Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase)))
-                //    {
-                //        return new[] { path };
-                //    }
-                //    else
-                //    {
-                //        return Array.Empty<string>();
-                //    }
-                //}).ToList();
-
-
                 var droppedFiles = paths.SelectMany(path =>
                 {
                     if (Directory.Exists(path))
@@ -133,6 +111,7 @@ namespace RemuxOpt
                     RemoveAttachments = chkRemoveAttachments.Checked,
                     RemoveForcedFlags = chkRemoveAttachments.Checked,
                     RemoveFileTitle = chkRemoveFileTitle.Checked,
+                    DefaultTrackLanguageCode = GetDefaultLanguageCode(),
                     AudioLanguageOrder = lvAudioTracks.Items.Cast<ListViewItem>()
                         .Select(item => item.SubItems[1].Text)
                         .ToList(),
@@ -157,6 +136,21 @@ namespace RemuxOpt
                 _backgroundWorker.RunWorkerAsync(context);
             };
         }
+
+        private string GetDefaultLanguageCode()
+        {
+            XDocument doc = XDocument.Load("config.xml");
+
+            string? defaultAudioLangCode = doc
+                .Root?
+                .Element("lvAudioTracks")?
+                .Elements("Language")
+                .FirstOrDefault(x => string.Equals(x.Attribute("IsDefault")?.Value, "true", StringComparison.OrdinalIgnoreCase))
+                ?.Attribute("Code")?.Value;
+
+            return !string.IsNullOrEmpty(defaultAudioLangCode) ? defaultAudioLangCode : string.Empty;
+        }
+
 
         private void InitGrid()
         {
@@ -695,7 +689,46 @@ namespace RemuxOpt
             listView.InsertionMark.AppearsAfterItem = false; // Show before the item
             listView.FullRowSelect = true;
 
+            if (listView.Name == "lvAudioTracks")
+            {
+                InitializeListViewContextMenu(listView);
+            }
+
             LoadListFromXml(listView);
+        }
+
+        private void InitializeListViewContextMenu(ListView listView)
+        { 
+            var contextMenu = new ContextMenuStrip();
+            contextMenu.Items.Add("Set default").Click += (s, e) => SetDefaultAudioLanguage(listView);
+
+            listView.MouseDown += (sender, e) => ListView_MouseDown(listView, e, contextMenu);
+        }
+
+        private void ListView_MouseDown(object sender, MouseEventArgs e, ContextMenuStrip contextMenu)
+        {
+            var listView = sender as ListView;
+
+            if (e.Button == MouseButtons.Right && listView != null)
+            {
+                var info = listView.HitTest(e.Location);
+                listView.FocusedItem = info.Item;
+                listView.ContextMenuStrip = info.Item != null ? contextMenu : null;
+            }
+        }
+
+        private void SetDefaultAudioLanguage(ListView listView)
+        {
+            if (listView?.FocusedItem != null)
+            {
+                foreach (ListViewItem item in listView.Items)
+                {
+                    item.Font = listView.Font;
+                }
+
+                listView.FocusedItem.Font = new Font(listView.Font, FontStyle.Bold);
+                SaveListToXml();
+            }
         }
 
         private void LvGeneric_ItemDrag(object sender, ItemDragEventArgs e)
@@ -817,15 +850,20 @@ namespace RemuxOpt
             }
         }
 
-        private void AddLanguageToListView(ListView targetListView, LanguageObject lang)
+        private void AddLanguageToListView(ListView targetListView, LanguageObject lang, bool isDefault)
         {
             var item = new ListViewItem(lang.Name);
             item.SubItems.Add(lang.Abr3a);
 
             var delItem = new ListViewSubItem(item, "✕")
             {
-                Font = new Font(lvAudioTracks.Font, FontStyle.Bold)
+                //Font = new Font(lvAudioTracks.Font, FontStyle.Bold)
             };
+
+            if (isDefault)
+            {
+                item.Font = new Font(targetListView.Font, FontStyle.Bold);
+            }
 
             item.UseItemStyleForSubItems = false;
             item.SubItems.Add(delItem);
@@ -837,7 +875,7 @@ namespace RemuxOpt
         {
             foreach (var lang in langs)
             {
-                AddLanguageToListView(targetListView, lang);
+                AddLanguageToListView(targetListView, lang, isDefault: false);
             }
         }
 
@@ -884,7 +922,7 @@ namespace RemuxOpt
 
             if (addLanguageForm.ShowDialog() == DialogResult.OK)
             {
-                AddLanguageToListView(targetListView, addLanguageForm.SelectedLanguage);
+                AddLanguageToListView(targetListView, addLanguageForm.SelectedLanguage, isDefault: false);
                 SaveListToXml();
             }
         }
@@ -902,9 +940,14 @@ namespace RemuxOpt
 
                     foreach (XElement langElement in listElement.Elements("Language"))
                     {
-                        AddLanguageToListView(targetListView,
-                            new LanguageObject(langElement.Attribute("Name")?.Value ?? string.Empty, langElement.Attribute("Code")?.Value ?? string.Empty)
-                        );
+                        string name = langElement.Attribute("Name")?.Value ?? string.Empty;
+                        string code = langElement.Attribute("Code")?.Value ?? string.Empty;
+                        bool isDefault = false;
+
+                        if (bool.TryParse(langElement.Attribute("IsDefault")?.Value, out bool parsed))
+                            isDefault = parsed;
+
+                        AddLanguageToListView(targetListView, new LanguageObject(name, code), isDefault);
                     }
                 }
             }
@@ -917,6 +960,8 @@ namespace RemuxOpt
         private void AddDefaultLanguagesToListViews()
         {
             AddDefaultLanguagesToListView(lvAudioTracks);
+            lvAudioTracks.Items[0].Font = new Font(lvAudioTracks.Font, FontStyle.Bold);
+
             AddDefaultLanguagesToListView(lvSubtitleTracks);
 
             SaveListToXml();
@@ -942,7 +987,8 @@ namespace RemuxOpt
                         lvAudioTracks.Items.Cast<ListViewItem>().Select(item =>
                             new XElement("Language",
                                 new XAttribute("Name", item.Text),
-                                new XAttribute("Code", item.Tag?.ToString() ?? "")
+                                new XAttribute("Code", item.Tag?.ToString() ?? string.Empty),
+                                new XAttribute("IsDefault", item.Font.Bold ? "true" : "false")
                             )
                         )
                     ),
@@ -950,7 +996,7 @@ namespace RemuxOpt
                         lvSubtitleTracks.Items.Cast<ListViewItem>().Select(item =>
                             new XElement("Language",
                                 new XAttribute("Name", item.Text),
-                                new XAttribute("Code", item.Tag?.ToString() ?? "")
+                                new XAttribute("Code", item.Tag?.ToString() ?? string.Empty)
                             )
                         )
                     )
