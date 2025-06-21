@@ -5,5 +5,4 @@
         public List<MkvFileInfo> Files { get; set; } = [];
         public BackgroundTaskType TaskType { get; set; }
     }
-
 }

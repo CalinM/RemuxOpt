@@ -3,37 +3,9 @@ using System.Text.Json.Nodes;
 
 namespace RemuxOpt
 {
-    public class MkvFileInfo
+    public class MkvMetadataExtractor
     {
-        public string FileName { get; set; } = string.Empty;
-        public List<AudioTrack> AudioTracks { get; set; } = [];
-        public List<SubtitleTrack> Subtitles { get; set; } = [];
-        public List<Attachment> Attachments { get; set; } = [];
-    }
-
-    public class AudioTrack
-    {
-        public string Language { get; set; } = string.Empty;
-        public string Title { get; set; } = string.Empty;
-        public int Channels { get; set; }
-        public int? Bitrate { get; set; }  // from ffprobe
-    }
-
-    public class SubtitleTrack
-    {
-        public string Language { get; set; } = string.Empty;
-        public string Title { get; set; } = string.Empty;
-    }
-
-    public class Attachment
-    {
-        public string MimeType { get; set; } = string.Empty;
-        public string FileName { get; set; } = string.Empty;
-    }
-
-    public static class MkvMetadataExtractor
-    {
-        public static async Task<MkvFileInfo> ExtractInfoAsync(string filePath)
+        public async Task<MkvFileInfo> ExtractInfoAsync(string filePath)
         {
             var mkvmergeJson = await RunProcessAsync("mkvmerge", $"-J \"{filePath}\"");
             var ffprobeJson = await RunProcessAsync("ffprobe", $"-v quiet -print_format json -show_streams \"{filePath}\"");
@@ -66,10 +38,29 @@ namespace RemuxOpt
             var ffAudio = ffObj["streams"].AsArray().Where(s => s["codec_type"]?.ToString() == "audio").ToList();
             for (int i = 0; i < result.AudioTracks.Count && i < ffAudio.Count; i++)
             {
-                var bitrateStr = ffAudio[i]["bit_rate"]?.ToString();
-                if (int.TryParse(bitrateStr, out int bitrate))
-                    result.AudioTracks[i].Bitrate = bitrate;
+                var stream = ffAudio[i];
+                var bitrate = 0;
+
+                // Try direct "bit_rate"
+                var bitrateStr = stream["bit_rate"]?.ToString();
+
+                if (!int.TryParse(bitrateStr, out bitrate))
+                {
+                    // Fallback to tags.BPS
+                    var tags = stream["tags"] as JsonObject;
+                    var bpsStr = tags?["BPS"]?.ToString();
+                    
+                    _ = int.TryParse(bpsStr, out bitrate);
+                }
+
+                result.AudioTracks[i].BitRate = bitrate;
             }
+
+            var mkvBaseName = Path.GetFileNameWithoutExtension(filePath);
+            var folder = Path.GetDirectoryName(filePath);
+
+            var audioExtensions = new[] { ".aac", ".ac3", ".dts", ".mka" };
+            result.ExternalAudioFiles = FindExternalAudioTracks(folder, mkvBaseName);                
 
             // Subtitles
             foreach (var track in mkvObj["tracks"].AsArray().Where(t => t["type"].ToString() == "subtitles"))
@@ -98,7 +89,40 @@ namespace RemuxOpt
             return result;
         }
 
-        private static async Task<string> RunProcessAsync(string fileName, string args)
+        private List<ExternalAudioTrack> FindExternalAudioTracks(string folder, string baseName)
+        {
+            var audioExtensions = new[] { ".aac", ".ac3", ".dts", ".mka" };
+
+            return Directory.EnumerateFiles(folder)
+                .Where(path =>
+                    {
+                        var ext = Path.GetExtension(path).ToLowerInvariant();
+                        var name = Path.GetFileNameWithoutExtension(path);
+                        return audioExtensions.Contains(ext) && name.StartsWith(baseName, StringComparison.OrdinalIgnoreCase);
+                    })
+                .Select(filePath => new ExternalAudioTrack
+                    {
+                        Extension = Path.GetExtension(filePath),
+                        FileName = filePath,
+                        LanguageCode = TryGuessLanguageCodeFromFileName(filePath) ?? "und"
+                    })
+                .ToList();
+        }
+
+        private string? TryGuessLanguageCodeFromFileName(string filePath)
+        {
+            //var knownLangs = new[] { "eng", "dut", "ron", "fil", "fre", "ger", "ita", "spa", "jpn" };
+            var fileName = Path.GetFileNameWithoutExtension(filePath);
+
+            // Extract suffix after base name, if present
+            var langCandidate = fileName
+                .Split(new[] { '_', '.', '-', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                .LastOrDefault()?.ToLowerInvariant();
+
+            return Languages.Iso639.Select(l => l.Abr3a).Contains(langCandidate) ? langCandidate : null;
+        }
+
+        private async Task<string> RunProcessAsync(string fileName, string args)
         {
             var psi = new ProcessStartInfo
             {

@@ -37,11 +37,50 @@ namespace RemuxOpt
                 lbDragFolderHere.Visible = false;
 
                 var paths = (string[])e.Data.GetData(DataFormats.FileDrop);
-                var dropppedFiles = paths.SelectMany(path =>
-                    Directory.Exists(path) ?
-                        Directory.GetFiles(path, "*.mkv", SearchOption.AllDirectories)
-                        .Concat(Directory.GetFiles(path, "*.mp4", SearchOption.AllDirectories)) :
-                        [path]).ToList();
+
+                //var droppedFiles = paths.SelectMany(path =>
+                //{
+                //    if (Directory.Exists(path))
+                //    {
+                //        return Directory.GetFiles(path, "*.*", SearchOption.AllDirectories)
+                //            .Where(f =>
+                //                Path.GetExtension(f).Equals(".mkv", StringComparison.OrdinalIgnoreCase) ||
+                //                Path.GetExtension(f).Equals(".mp4", StringComparison.OrdinalIgnoreCase));
+                //    }
+                //    else if (File.Exists(path) &&
+                //        (Path.GetExtension(path).Equals(".mkv", StringComparison.OrdinalIgnoreCase) ||
+                //         Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase)))
+                //    {
+                //        return new[] { path };
+                //    }
+                //    else
+                //    {
+                //        return Array.Empty<string>();
+                //    }
+                //}).ToList();
+
+
+                var droppedFiles = paths.SelectMany(path =>
+                {
+                    if (Directory.Exists(path))
+                    {
+                        var files = Directory.GetFiles(path, "*.*", SearchOption.AllDirectories)
+                            .Where(f => Path.GetExtension(f).Equals(".mkv", StringComparison.OrdinalIgnoreCase) ||
+                                        Path.GetExtension(f).Equals(".mp4", StringComparison.OrdinalIgnoreCase));
+                        return files.Select(f => new MkvFileInfo { FileName = f });
+                    }
+                    else if (File.Exists(path) && 
+                            (Path.GetExtension(path).Equals(".mkv", StringComparison.OrdinalIgnoreCase) ||
+                             Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        return [new MkvFileInfo { FileName = path }];
+                    }
+                    else
+                    {
+                        return Enumerable.Empty<MkvFileInfo>();
+                    }
+                }).ToList();
+
 
                 if (!_backgroundWorker.IsBusy)
                 {
@@ -52,7 +91,7 @@ namespace RemuxOpt
                         TaskType = BackgroundTaskType.LoadDroppedFiles,
                         Payload = new WorkerPayload
                         {
-                            Files = dropppedFiles
+                            Files = droppedFiles
                         }
                     };
 
@@ -93,7 +132,7 @@ namespace RemuxOpt
                     UseAutoTitle = chkAutoTitleForAudioTrack.Checked,
                     RemoveAttachments = chkRemoveAttachments.Checked,
                     RemoveForcedFlags = chkRemoveAttachments.Checked,
-                    RermoveFileTitle = chkRemoveFileTitle.Checked,
+                    RemoveFileTitle = chkRemoveFileTitle.Checked,
                     AudioLanguageOrder = lvAudioTracks.Items.Cast<ListViewItem>()
                         .Select(item => item.SubItems[1].Text)
                         .ToList(),
@@ -179,12 +218,14 @@ namespace RemuxOpt
             }
         }
 
-        private async Task<WorkerResult> LoadMkvFileInfosAsync(List<string> files, BackgroundWorker worker, DoWorkEventArgs e)
+        private async Task<WorkerResult> LoadMkvFileInfosAsync(List<MkvFileInfo> files, BackgroundWorker worker, DoWorkEventArgs e)
         {
             var workerResult = new WorkerResult
             {
                 TaskType = BackgroundTaskType.LoadDroppedFiles
             };
+
+            var mkvMetadataExtractor = new MkvMetadataExtractor();
 
             for (int i = 0; i < files.Count; i++)
             {
@@ -194,11 +235,11 @@ namespace RemuxOpt
                     return workerResult;
                 }
 
-                string file = files[i];
+                string file = files[i].FileName;
 
                 try
                 {
-                    var info = await MkvMetadataExtractor.ExtractInfoAsync(file);
+                    var info = await mkvMetadataExtractor.ExtractInfoAsync(file);
                     workerResult.Files.Add(info);
 
                     int percent = (int)((i + 1) / (double)files.Count * 100);
@@ -207,6 +248,7 @@ namespace RemuxOpt
                         $"Processing: {Path.GetFileName(Path.GetFileName(file))}",
                         string.Empty
                     );
+
                     worker.ReportProgress(percent, progressMessage);
                 }
                 catch (Exception ex)
@@ -278,6 +320,7 @@ namespace RemuxOpt
 
             int maxAudio = files.Max(f => f.AudioTracks.Count);
             int maxSubs = files.Max(f => f.Subtitles.Count);
+            var hasExternalAudio = files.FirstOrDefault(x => x.ExternalAudioFiles.Any()) != null;
 
             //System columns
             var checkCol = new DataGridViewCheckBoxColumn
@@ -299,7 +342,16 @@ namespace RemuxOpt
                 HeaderText = "File name",
                 Frozen = true
             };
+
             _dataGridViewResults.Columns.Add(col);
+
+            // External audio column
+            if (hasExternalAudio)
+            {
+                _dataGridViewResults.Columns.Add($"ExternalAudioType", "External Audio Type");
+                _dataGridViewResults.Columns.Add($"ExternalAudioLanguage", "External Audio Language");
+            }
+
 
             // Audio columns
             for (int i = 0; i < maxAudio; i++)
@@ -342,12 +394,20 @@ namespace RemuxOpt
                     Path.GetFileName(file.FileName)
                 };
 
+                if (hasExternalAudio)
+                {
+                    var eaf = file.ExternalAudioFiles.FirstOrDefault(); //only one is supported for display and process (todo more)
+
+                    row.Add(eaf.Extension);
+                    row.Add(eaf.LanguageCode);
+                }
+
                 foreach (var a in file.AudioTracks)
                 {
                     row.Add(a.Language);
                     row.Add(a.Title);
                     row.Add(a.Channels);
-                    row.Add(a.Bitrate.HasValue ? (a.Bitrate.Value / 1000).ToString() : "");
+                    row.Add(a.BitRate.HasValue ? (a.BitRate.Value / 1000).ToString() : "");
                 }
 
                 for (int i = file.AudioTracks.Count; i < maxAudio; i++)
@@ -365,7 +425,7 @@ namespace RemuxOpt
                 row.Add(file.Attachments.Count);
 
                 var dgRow = _dataGridViewResults.Rows[_dataGridViewResults.Rows.Add(row.ToArray())];
-                dgRow.Tag = file.FileName;
+                dgRow.Tag = file;
             }
 
             _dataGridViewResults.SuspendLayout();
@@ -381,6 +441,20 @@ namespace RemuxOpt
             _dataGridViewResults.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
 
             _dataGridViewResults.HeaderCheckState = true;
+
+            for (int i = 0; i < _dataGridViewResults.Rows.Count; i++)
+            {            
+                //Filename/fixed column
+                _dataGridViewResults.Rows[i].Cells[1].Style.BackColor = Color.WhiteSmoke;
+                
+                if (hasExternalAudio)
+                {
+                    // External audio columns
+                    _dataGridViewResults.Rows[i].Cells[2].Style.BackColor = Color.AntiqueWhite;
+                    _dataGridViewResults.Rows[i].Cells[3].Style.BackColor = Color.AntiqueWhite;
+                }
+
+            }
             _dataGridViewResults.ResumeLayout();
         }
 
@@ -403,7 +477,7 @@ namespace RemuxOpt
                         _ => $"{audio.Channels}.0"
                     };
 
-                    var bitrate = audio.Bitrate.HasValue ? $"{audio.Bitrate.Value / 1000} kbps" : "unknown bitrate";
+                    var bitrate = audio.BitRate.HasValue ? $"{audio.BitRate.Value / 1000} kbps" : "unknown bitrate";
                     sb.AppendLine($"  Audio [{audio.Language}]: {channels} @ {bitrate} - {audio.Title}");
                 }
 
@@ -485,11 +559,11 @@ namespace RemuxOpt
             if (!string.IsNullOrEmpty(exePath))
             {
                 var versionInfo = FileVersionInfo.GetVersionInfo(exePath);
-                lbMkvVersion.Text = $"mkvmerge found in PATH! Version: {versionInfo.FileVersion}";
+                lbMkvVersion.Text = $"mkvmerge found! Version: {versionInfo.FileVersion}";
             }
             else
             {
-                lbMkvVersion.Text = $"mkvmerge not found in PATH!";
+                lbMkvVersion.Text = $"mkvmerge not found!";
                 lbMkvVersion.ForeColor = Color.Red;
                 result = false;
             }
@@ -516,13 +590,45 @@ namespace RemuxOpt
                     string versionLine = output.Split('\n').FirstOrDefault(line => line.StartsWith("ffprobe version"));
                     string version = versionLine?.Split(' ')[2] ?? "Unknown";
 
-                    lbFFprobeVersion.Text = $"ffprobe found in PATH! Version: {version}";
+                    lbFFprobeVersion.Text = $"ffprobe found! Version: {version}";
                 }
             }
             else
             {
-                lbFFprobeVersion.Text = $"ffprobe not found in PATH!";
+                lbFFprobeVersion.Text = $"ffprobe not found!";
                 lbFFprobeVersion.ForeColor = Color.Red;
+                result = false;
+            }
+
+            exePath = GetExecutablePath("MediaInfo.exe");
+
+            if (!string.IsNullOrEmpty(exePath))
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "MediaInfo",
+                    Arguments = "--Version", // ffprobe prints version info here
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                using (var process = Process.Start(psi))
+                {
+                    string output = process.StandardOutput.ReadToEnd();
+                    process.WaitForExit();
+
+                    // First line looks like: "ffprobe version 6.1.1 ..."
+                    string versionLine = output.Split('\n').FirstOrDefault(line => line.StartsWith("MediaInfoLib"));
+                    string version = versionLine?.Split(' ')[2] ?? "Unknown";
+
+                    lbMediaInfoCliVersion.Text = $"MediaInfo CLI found! Version: {version}";
+                }
+            }
+            else
+            {
+                lbMediaInfoCliVersion.Text = $"MediaInfo CLI not found!";
+                lbMediaInfoCliVersion.ForeColor = Color.Red;
                 result = false;
             }
 
@@ -854,12 +960,12 @@ namespace RemuxOpt
             doc.Save("config.xml"); // Save near the EXE
         }
 
-        private List<string> GetCheckedFilenames()
+        private List<MkvFileInfo> GetCheckedFilenames()
         {
             return _dataGridViewResults.Rows
                 .Cast<DataGridViewRow>()
                 .Where(row => Convert.ToBoolean(row.Cells["Selected"].Value))
-                .Select(row => row.Tag?.ToString()!)
+                .Select(row => (MkvFileInfo)row.Tag)
                 .ToList();
         }
 
@@ -882,19 +988,15 @@ namespace RemuxOpt
 
             for (int i = 0; i < selectedFiles.Count; i++)
             {
-                string inputFile = selectedFiles[i];
-                string outputFile = Path.Combine(
-                    Path.GetDirectoryName(inputFile)!,
-                    Path.GetFileNameWithoutExtension(inputFile) + ".remuxed.mkv"
-                );
+                var currentFile = selectedFiles[i];
 
                 sb.AppendLine("Input file:");
-                sb.AppendLine(inputFile);
+                sb.AppendLine(currentFile.FileName);
                 sb.AppendLine("Output file:");
-                sb.AppendLine(outputFile);
+                sb.AppendLine(currentFile.OutputFileName);
 
                 var progressMessage = new ProgressMessage(
-                    $"Processing: {Path.GetFileName(inputFile)}",
+                    $"Processing: {Path.GetFileName(currentFile.FileName)}",
                     sb.ToString()
                 );
 
@@ -905,7 +1007,7 @@ namespace RemuxOpt
 
                 try
                 {
-                    string args = remuxHelper.BuildMkvMergeArgs(inputFile, outputFile);
+                    string args = remuxHelper.BuildMkvMergeArgs(currentFile);
 
                     sb.AppendLine("Arguments:");
                     sb.AppendLine(args);

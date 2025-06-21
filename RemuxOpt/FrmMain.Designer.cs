@@ -29,6 +29,7 @@
         private void InitializeComponent()
         {
             pParameters = new Panel();
+            lbMediaInfoCliVersion = new Label();
             chkRemoveFileTitle = new CheckBox();
             bRemux = new Button();
             lbFFprobeVersion = new Label();
@@ -69,6 +70,7 @@
             // 
             // pParameters
             // 
+            pParameters.Controls.Add(lbMediaInfoCliVersion);
             pParameters.Controls.Add(chkRemoveFileTitle);
             pParameters.Controls.Add(bRemux);
             pParameters.Controls.Add(lbFFprobeVersion);
@@ -91,6 +93,16 @@
             pParameters.Name = "pParameters";
             pParameters.Size = new Size(440, 759);
             pParameters.TabIndex = 0;
+            // 
+            // lbMediaInfoCliVersion
+            // 
+            lbMediaInfoCliVersion.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            lbMediaInfoCliVersion.AutoEllipsis = true;
+            lbMediaInfoCliVersion.Location = new Point(12, 740);
+            lbMediaInfoCliVersion.Name = "lbMediaInfoCliVersion";
+            lbMediaInfoCliVersion.Size = new Size(414, 15);
+            lbMediaInfoCliVersion.TabIndex = 48;
+            lbMediaInfoCliVersion.Text = "check media info cli";
             // 
             // chkRemoveFileTitle
             // 
@@ -117,7 +129,7 @@
             // 
             lbFFprobeVersion.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             lbFFprobeVersion.AutoEllipsis = true;
-            lbFFprobeVersion.Location = new Point(12, 735);
+            lbFFprobeVersion.Location = new Point(12, 724);
             lbFFprobeVersion.Name = "lbFFprobeVersion";
             lbFFprobeVersion.Size = new Size(414, 15);
             lbFFprobeVersion.TabIndex = 45;
@@ -126,7 +138,7 @@
             // lbMkvVersion
             // 
             lbMkvVersion.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            lbMkvVersion.Location = new Point(12, 720);
+            lbMkvVersion.Location = new Point(12, 708);
             lbMkvVersion.Name = "lbMkvVersion";
             lbMkvVersion.Size = new Size(414, 15);
             lbMkvVersion.TabIndex = 44;
@@ -447,5 +459,6 @@
         private TabPage tpOutput;
         private TextBox tbOutput;
         private CheckBox chkRemoveFileTitle;
+        private Label lbMediaInfoCliVersion;
     }
 }
