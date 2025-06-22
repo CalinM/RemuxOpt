@@ -24,7 +24,7 @@
   </PropertyGroup>
 
   <!-- Increment build number before build -->
-  <Target Name="IncrementBuildNumber" BeforeTargets="GetAssemblyVersion;GetAssemblyAttributes">
+  <Target Name="IncrementBuildNumber" BeforeTargets="CoreCompile">
     <PropertyGroup>
       <NewBuildNumber>$([MSBuild]::Add($(BuildNumber), 1))</NewBuildNumber>
     </PropertyGroup>
