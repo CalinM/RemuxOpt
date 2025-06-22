@@ -24,11 +24,27 @@ jobs:
       - name: Get version from project
         id: version
         run: |
-          $version = (Select-Xml -Path "*.csproj" -XPath "//Version").Node.InnerText
-          if ([string]::IsNullOrEmpty($version)) {
-            Write-Error "Could not find version in .csproj file"
+          # Find the .csproj file
+          $csprojFile = Get-ChildItem -Path . -Filter "*.csproj" -Recurse | Select-Object -First 1
+          if (-not $csprojFile) {
+            Write-Error "Could not find any .csproj file"
             exit 1
           }
+          
+          Write-Host "Found .csproj file: $($csprojFile.FullName)"
+          
+          # Read and parse the XML
+          [xml]$projectXml = Get-Content $csprojFile.FullName
+          $versionNode = $projectXml.SelectSingleNode("//Version")
+          
+          if (-not $versionNode -or [string]::IsNullOrEmpty($versionNode.InnerText)) {
+            Write-Error "Could not find <Version> element in $($csprojFile.Name)"
+            Write-Host "Project file content:"
+            Get-Content $csprojFile.FullName | Write-Host
+            exit 1
+          }
+          
+          $version = $versionNode.InnerText.Trim()
           Write-Host "Found version: $version"
           echo "VERSION=$version" >> $env:GITHUB_OUTPUT
         shell: powershell
