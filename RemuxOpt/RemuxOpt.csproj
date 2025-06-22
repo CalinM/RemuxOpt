@@ -7,7 +7,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-
+    
     <!-- Version properties -->
     <VersionMajor>1</VersionMajor>
     <VersionMinor>0</VersionMinor>

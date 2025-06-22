@@ -2,8 +2,10 @@ name: Build and Release
 
 on:
   push:
+    branches:
+      - master  # Triggers on push to main branch
     tags:
-      - 'v*'  # Triggers on version tags like v1.0.0
+      - 'v*'  # Also triggers on version tags
 
 jobs:
   build:
@@ -11,41 +13,97 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Needed for git operations
     
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '8.0.x'
+
+    - name: Get version from project
+      id: get_version
+      run: |
+        # Build the project to trigger version generation
+        dotnet build --configuration Release --verbosity normal > build.log 2>&1
+        
+        # Extract version from build log
+        $versionLine = Select-String -Path "build.log" -Pattern "Building with version:" | Select-Object -Last 1
+        if ($versionLine) {
+          $version = ($versionLine.Line -split "Building with version: ")[1].Trim()
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "Found version from build log: $version"
+        } else {
+          # Fallback: read from assembly after build
+          $exePath = Get-ChildItem -Path "./bin/Release/net8.0-windows/" -Filter "*.exe" | Select-Object -First 1
+          if ($exePath) {
+            $assembly = [System.Reflection.Assembly]::LoadFrom($exePath.FullName)
+            $version = $assembly.GetName().Version
+            $versionString = "$($version.Major).$($version.Minor).$($version.Build).$($version.Revision)"
+            echo "VERSION=$versionString" >> $env:GITHUB_OUTPUT
+            echo "Found version from assembly: $versionString"
+          } else {
+            echo "ERROR: Could not determine version"
+            exit 1
+          }
+        }
+
+    - name: Check if release exists
+      id: check_release
+      run: |
+        $version = "${{ steps.get_version.outputs.VERSION }}"
+        $tag = "v$version"
+        try {
+          gh release view $tag
+          echo "RELEASE_EXISTS=true" >> $env:GITHUB_OUTPUT
+          echo "Release v$version already exists, skipping..."
+        } catch {
+          echo "RELEASE_EXISTS=false" >> $env:GITHUB_OUTPUT
+          echo "Release v$version does not exist, proceeding with build..."
+        }
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Restore dependencies
+      if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
       run: dotnet restore
     
-    - name: Build
-      run: dotnet build --configuration Release --no-restore
+    - name: Build (already done in get_version, skip if release exists)
+      if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
+      run: echo "Build already completed in version detection step"
     
     - name: Publish Windows x64
+      if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
       run: dotnet publish --configuration Release --runtime win-x64 --self-contained true --output ./publish/win-x64
     
     - name: Publish Windows x86
+      if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
       run: dotnet publish --configuration Release --runtime win-x86 --self-contained true --output ./publish/win-x86
     
     - name: Create ZIP packages
+      if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
       run: |
         Compress-Archive -Path ./publish/win-x64/* -DestinationPath ./RemuxOpt-win-x64.zip
         Compress-Archive -Path ./publish/win-x86/* -DestinationPath ./RemuxOpt-win-x86.zip
     
     - name: Create Release
+      if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
       uses: softprops/action-gh-release@v1
       with:
+        tag_name: v${{ steps.get_version.outputs.VERSION }}
+        name: RemuxOpt v${{ steps.get_version.outputs.VERSION }}
         files: |
           ./RemuxOpt-win-x64.zip
           ./RemuxOpt-win-x86.zip
         body: |
-          ## Changes
-          - Add your release notes here
+          ## RemuxOpt v${{ steps.get_version.outputs.VERSION }}
+          
+          Auto-generated release from assembly version.
           
           ## Download
           - **Windows 64-bit**: RemuxOpt-win-x64.zip
           - **Windows 32-bit**: RemuxOpt-win-x86.zip
+        draft: false
+        prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
