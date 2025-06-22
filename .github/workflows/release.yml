@@ -23,7 +23,14 @@ jobs:
 
       - name: Set version output
         id: version
-        run: echo "VERSION=1.0.0.${{ github.run_number }}" >> $env:GITHUB_OUTPUT
+        run: |
+          $runNumber = "${{ github.run_number }}"
+          if ([string]::IsNullOrEmpty($runNumber)) {
+            $runNumber = "1"
+          }
+          $version = "1.0.0.$runNumber"
+          Write-Host "Generated version: $version"
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
         shell: powershell
 
       - name: Print version info
@@ -88,15 +95,15 @@ jobs:
 
       - name: Build Release with version
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-        run: dotnet build --configuration Release --no-restore -p:BuildNumber=${{ github.run_number }}
+        run: dotnet build --configuration Release --no-restore -p:Version=${{ steps.version.outputs.VERSION }}
 
       - name: Publish Windows x64
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-        run: dotnet publish --configuration Release --runtime win-x64 --self-contained true --output ./publish/win-x64 --no-restore -p:BuildNumber=${{ github.run_number }}
+        run: dotnet publish --configuration Release --runtime win-x64 --self-contained true --output ./publish/win-x64 --no-restore -p:Version=${{ steps.version.outputs.VERSION }}
 
       - name: Publish Windows x86
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-        run: dotnet publish --configuration Release --runtime win-x86 --self-contained true --output ./publish/win-x86 --no-restore -p:BuildNumber=${{ github.run_number }}
+        run: dotnet publish --configuration Release --runtime win-x86 --self-contained true --output ./publish/win-x86 --no-restore -p:Version=${{ steps.version.outputs.VERSION }}
 
       - name: Create ZIP packages
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
