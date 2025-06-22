@@ -7,37 +7,18 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    
-    <!-- Version properties -->
+
+    <!-- Static major/minor/patch version -->
     <VersionMajor>1</VersionMajor>
     <VersionMinor>0</VersionMinor>
     <VersionPatch>0</VersionPatch>
 
-    <!-- Build number file -->
-    <BuildNumberFile>$(MSBuildProjectDirectory)\buildnumber.txt</BuildNumberFile>
+    <!-- Injected at build time from GitHub Actions -->
+    <Version>$(VersionMajor).$(VersionMinor).$(VersionPatch).$(BuildNumber)</Version>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
   </PropertyGroup>
 
-  <!-- Read current build number, or start at 1 if file doesn't exist -->
-  <PropertyGroup>
-    <BuildNumber Condition="Exists('$(BuildNumberFile)')">$([System.IO.File]::ReadAllText('$(BuildNumberFile)').Trim())</BuildNumber>
-    <BuildNumber Condition="!Exists('$(BuildNumberFile)')">1</BuildNumber>
-  </PropertyGroup>
-
-  <!-- Increment build number before build -->
-  <Target Name="IncrementBuildNumber" BeforeTargets="CoreCompile">
-    <Message Text="➡️ Running IncrementBuildNumber target…" Importance="high" />
-    <PropertyGroup>
-      <NewBuildNumber>$([MSBuild]::Add($(BuildNumber), 1))</NewBuildNumber>
-    </PropertyGroup>
-    <WriteLinesToFile File="$(BuildNumberFile)" Lines="$(NewBuildNumber)" Overwrite="true" />
-    <PropertyGroup>
-      <AssemblyVersion>$(VersionMajor).$(VersionMinor).$(VersionPatch).$(NewBuildNumber)</AssemblyVersion>
-      <FileVersion>$(VersionMajor).$(VersionMinor).$(VersionPatch).$(NewBuildNumber)</FileVersion>
-      <Version>$(VersionMajor).$(VersionMinor).$(VersionPatch)</Version>
-    </PropertyGroup>
-    <Message Text="💡 Incremented build number to $(NewBuildNumber)" Importance="high" />
-  </Target>
-  
   <ItemGroup>
     <PackageReference Include="WindowsAPICodePack-Shell" Version="1.1.1" />
   </ItemGroup>
