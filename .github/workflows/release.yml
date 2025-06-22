@@ -46,26 +46,7 @@ jobs:
           Write-Host "Build number file does not exist yet"
         }
         
-        # Use MSBuild to get the version properties directly
-        Write-Host "Extracting version using MSBuild properties..."
-        
-        # Create a temporary target file to extract version info
-        $tempTarget = @"
-<Project>
-  <Target Name="GetVersion">
-    <Message Text="ASSEMBLY_VERSION=$([MSBuild]::GetAssemblyVersion())" Importance="high" Condition="'$([MSBuild]::GetAssemblyVersion())' != ''" />
-    <Message Text="FILE_VERSION=$([MSBuild]::GetFileVersion())" Importance="high" Condition="'$([MSBuild]::GetFileVersion())' != ''" />
-    <Message Text="VERSION=$([MSBuild]::GetVersion())" Importance="high" Condition="'$([MSBuild]::GetVersion())' != ''" />
-    
-    <!-- Try to get the properties directly -->
-    <Message Text="PROP_ASSEMBLY_VERSION=$([MSBuild]::GetProperty('AssemblyVersion'))" Importance="high" Condition="'$([MSBuild]::GetProperty('AssemblyVersion'))' != ''" />
-    <Message Text="PROP_FILE_VERSION=$([MSBuild]::GetProperty('FileVersion'))" Importance="high" Condition="'$([MSBuild]::GetProperty('FileVersion'))' != ''" />
-    <Message Text="PROP_VERSION=$([MSBuild]::GetProperty('Version'))" Importance="high" Condition="'$([MSBuild]::GetProperty('Version'))' != ''" />
-  </Target>
-</Project>
-"@
-        
-        # Try a different approach - just do a restore and build, then check the buildnumber.txt file
+        # Simple approach - just do a restore and build, then check the buildnumber.txt file
         Write-Host "Restoring packages..."
         dotnet restore
         if ($LASTEXITCODE -ne 0) {
@@ -146,7 +127,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       shell: powershell
-    
+
     - name: Clean for fresh build
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
       run: dotnet clean --configuration Release
