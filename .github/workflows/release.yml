@@ -24,12 +24,123 @@ jobs:
       - name: Set version output
         id: version
         run: |
-          $runNumber = "${{ github.run_number }}"
-          if ([string]::IsNullOrEmpty($runNumber)) {
-            $runNumber = "1"
-          }
+          $runNumber = [int]$env:GITHUB_RUN_NUMBER
           $version = "1.0.0.$runNumber"
-          Write-Host "Generated version: $version"
+          Write-Host "Run number from env: $env:GITHUB_RUN_NUMBER"
+          Write-Host "Parsed run number: $runNumber"
+          Write-Host "Final version: $version"
+          
+          # Validate the version format
+          if ($version -match '^\d+\.\d+\.\d+\.\d+
+
+      - name: Print version info
+        run: |
+          echo "Run number: ${{ github.run_number }}"
+          echo "Using version: 1.0.0.${{ github.run_number }}"
+          echo "VERSION (from output): ${{ steps.version.outputs.VERSION }}"
+          echo "Tag: v1.0.0.${{ github.run_number }}"
+        shell: powershell
+
+      - name: Verify version
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          Write-Host "Version that will be used: $version"
+          if (-not $version -or $version -eq "") {
+            Write-Error "ERROR: Version is empty"
+            exit 1
+          }
+        shell: powershell
+
+      - name: Check if release exists
+        id: check_release
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $tag = "v$version"
+          $releaseExists = $false
+          Write-Host "Checking if release $tag already exists..."
+          
+          # Use GitHub API directly instead of gh CLI
+          $headers = @{
+            'Authorization' = "token $env:GITHUB_TOKEN"
+            'Accept' = 'application/vnd.github.v3+json'
+          }
+          
+          try {
+            $response = Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/tags/$tag" -Headers $headers -Method Get
+            if ($response) {
+              $releaseExists = $true
+              Write-Host "Release $tag already exists, skipping build steps..."
+            }
+          } catch {
+            if ($_.Exception.Response.StatusCode -eq 404) {
+              Write-Host "Release $tag does not exist, proceeding with build..."
+            } else {
+              Write-Host "Error checking release: $($_.Exception.Message)"
+              Write-Host "Proceeding with build anyway..."
+            }
+          }
+          
+          echo "RELEASE_EXISTS=$($releaseExists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: powershell
+
+      - name: Clean for fresh build
+        if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
+        run: dotnet clean --configuration Release
+
+      - name: Restore dependencies
+        if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
+        run: dotnet restore
+
+      - name: Build Release with version
+        if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
+        run: dotnet build --configuration Release --no-restore -p:Version=${{ steps.version.outputs.VERSION }}
+
+      - name: Publish Windows x64
+        if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
+        run: dotnet publish --configuration Release --runtime win-x64 --self-contained true --output ./publish/win-x64 --no-restore -p:Version=${{ steps.version.outputs.VERSION }}
+
+      - name: Publish Windows x86
+        if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
+        run: dotnet publish --configuration Release --runtime win-x86 --self-contained true --output ./publish/win-x86 --no-restore -p:Version=${{ steps.version.outputs.VERSION }}
+
+      - name: Create ZIP packages
+        if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
+        run: |
+          Compress-Archive -Path ./publish/win-x64/* -DestinationPath ./RemuxOpt-win-x64.zip -Force
+          Compress-Archive -Path ./publish/win-x86/* -DestinationPath ./RemuxOpt-win-x86.zip -Force
+          Write-Host "Created ZIP packages:"
+          Get-Item ./RemuxOpt-win-*.zip | ForEach-Object {
+            Write-Host "$($_.Name): $($_.Length) bytes"
+          }
+        shell: powershell
+
+      - name: Create Release
+        if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.VERSION }}
+          name: RemuxOpt v${{ steps.version.outputs.VERSION }}
+          files: |
+            ./RemuxOpt-win-x64.zip
+            ./RemuxOpt-win-x86.zip
+          body: |
+            ## RemuxOpt v${{ steps.version.outputs.VERSION }}
+            Auto-generated release from GitHub Actions build.
+            ## Download
+            - **Windows 64-bit**: RemuxOpt-win-x64.zip
+            - **Windows 32-bit**: RemuxOpt-win-x86.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}) {
+            Write-Host "Version format is valid"
+          } else {
+            Write-Error "Invalid version format: $version"
+            exit 1
+          }
+          
           echo "VERSION=$version" >> $env:GITHUB_OUTPUT
         shell: powershell
 
