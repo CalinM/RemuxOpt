@@ -24,29 +24,91 @@ jobs:
     - name: Get version from project
       id: get_version
       run: |
-        # Build the project to trigger version generation
-        dotnet build --configuration Release --verbosity normal > build.log 2>&1
+        # Build the project to trigger version generation and capture detailed output
+        Write-Host "Building project to determine version..."
+        dotnet build --configuration Release --verbosity normal --no-restore 2>&1 | Tee-Object -FilePath "build.log"
         
-        # Extract version from build log
-        $versionLine = Select-String -Path "build.log" -Pattern "Building with version:" | Select-Object -Last 1
-        if ($versionLine) {
-          $version = ($versionLine.Line -split "Building with version: ")[1].Trim()
-          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
-          echo "Found version from build log: $version"
-        } else {
-          # Fallback: read from assembly after build
-          $exePath = Get-ChildItem -Path "./bin/Release/net8.0-windows/" -Filter "*.exe" | Select-Object -First 1
-          if ($exePath) {
-            $assembly = [System.Reflection.Assembly]::LoadFrom($exePath.FullName)
-            $version = $assembly.GetName().Version
-            $versionString = "$($version.Major).$($version.Minor).$($version.Build).$($version.Revision)"
-            echo "VERSION=$versionString" >> $env:GITHUB_OUTPUT
-            echo "Found version from assembly: $versionString"
-          } else {
-            echo "ERROR: Could not determine version"
-            exit 1
+        # Check if build succeeded
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "Build failed with exit code $LASTEXITCODE"
+          Get-Content "build.log"
+          exit 1
+        }
+        
+        # Try to extract version from build log
+        $version = $null
+        $buildLogContent = Get-Content "build.log" -Raw
+        
+        # Look for the custom message we output in the project file
+        if ($buildLogContent -match "Building with version: ([\d\.]+)") {
+          $version = $matches[1]
+          Write-Host "Found version from build log: $version"
+        }
+        
+        # If we couldn't get it from the build log, try reading the buildnumber.txt file
+        if (-not $version) {
+          Write-Host "Could not extract version from build log, trying alternative methods..."
+          
+          # Check if buildnumber.txt exists and read the build number
+          $buildNumberFile = "buildnumber.txt"
+          if (Test-Path $buildNumberFile) {
+            $buildNumber = (Get-Content $buildNumberFile).Trim()
+            $version = "1.0.0.$buildNumber"
+            Write-Host "Constructed version from buildnumber.txt: $version"
           }
         }
+        
+        # Last resort: try to find and examine the built executable
+        if (-not $version) {
+          Write-Host "Trying to get version from built executable..."
+          
+          # Look for the executable in common output locations
+          $possiblePaths = @(
+            "./bin/Release/net8.0-windows/",
+            "./bin/Release/net8.0-windows/win-x64/",
+            "./bin/Release/net8.0/"
+          )
+          
+          $exePath = $null
+          foreach ($path in $possiblePaths) {
+            if (Test-Path $path) {
+              $exe = Get-ChildItem -Path $path -Filter "*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($exe) {
+                $exePath = $exe.FullName
+                Write-Host "Found executable at: $exePath"
+                break
+              }
+            }
+          }
+          
+          if ($exePath) {
+            try {
+              # Use System.Diagnostics.FileVersionInfo instead of loading assembly
+              $fileVersionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exePath)
+              if ($fileVersionInfo.FileVersion) {
+                $version = $fileVersionInfo.FileVersion
+                Write-Host "Found version from executable file info: $version"
+              }
+            } catch {
+              Write-Host "Error reading file version: $_"
+            }
+          }
+        }
+        
+        if (-not $version) {
+          Write-Host "ERROR: Could not determine version from any method"
+          Write-Host "Build log content:"
+          Get-Content "build.log"
+          Write-Host "Available files in bin directory:"
+          if (Test-Path "./bin") {
+            Get-ChildItem -Path "./bin" -Recurse
+          }
+          exit 1
+        }
+        
+        Write-Host "Final version determined: $version"
+        echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+      shell: powershell
 
     - name: Check if release exists
       id: check_release
@@ -55,45 +117,47 @@ jobs:
         $tag = "v$version"
         $releaseExists = $false
         
+        Write-Host "Checking if release $tag already exists..."
+        
         try {
           $result = gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
             $releaseExists = $true
-            echo "Release v$version already exists, skipping..."
+            Write-Host "Release $tag already exists, skipping build steps..."
+          } else {
+            Write-Host "Release $tag does not exist, proceeding with build..."
           }
         } catch {
-          # Release doesn't exist, continue
-        }
-        
-        if (-not $releaseExists) {
-          echo "Release v$version does not exist, proceeding with build..."
+          Write-Host "Release $tag does not exist, proceeding with build..."
         }
         
         echo "RELEASE_EXISTS=$($releaseExists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      shell: powershell
     
     - name: Restore dependencies
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
       run: dotnet restore
     
-    - name: Build (already done in get_version, skip if release exists)
+    - name: Build Release (Full Build)
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-      run: echo "Build already completed in version detection step"
+      run: dotnet build --configuration Release --no-restore
     
     - name: Publish Windows x64
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-      run: dotnet publish --configuration Release --runtime win-x64 --self-contained true --output ./publish/win-x64
+      run: dotnet publish --configuration Release --runtime win-x64 --self-contained true --output ./publish/win-x64 --no-restore
     
     - name: Publish Windows x86
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-      run: dotnet publish --configuration Release --runtime win-x86 --self-contained true --output ./publish/win-x86
+      run: dotnet publish --configuration Release --runtime win-x86 --self-contained true --output ./publish/win-x86 --no-restore
     
     - name: Create ZIP packages
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
       run: |
         Compress-Archive -Path ./publish/win-x64/* -DestinationPath ./RemuxOpt-win-x64.zip
         Compress-Archive -Path ./publish/win-x86/* -DestinationPath ./RemuxOpt-win-x86.zip
+      shell: powershell
     
     - name: Create Release
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
