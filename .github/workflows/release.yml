@@ -52,10 +52,8 @@ jobs:
           $releaseExists = $false
           Write-Host "Checking if release $tag already exists..."
           
-          # Use Invoke-Expression to properly handle the command and suppress errors
-          $ErrorActionPreference = "SilentlyContinue"
-          $result = & gh release view $tag --json name 2>$null
-          
+          # Check if release exists and handle exit codes properly
+          gh release view $tag --json name > $null 2>&1
           if ($LASTEXITCODE -eq 0) {
             $releaseExists = $true
             Write-Host "Release $tag already exists, skipping build steps..."
@@ -64,6 +62,9 @@ jobs:
           }
           
           echo "RELEASE_EXISTS=$($releaseExists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          
+          # Explicitly set exit code to 0 to prevent workflow failure
+          exit 0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: powershell
