@@ -25,22 +25,17 @@
 
   <!-- Increment build number before build -->
   <Target Name="IncrementBuildNumber" BeforeTargets="CoreCompile">
+    <Message Text="➡️ Running IncrementBuildNumber target…" Importance="high" />
     <PropertyGroup>
       <NewBuildNumber>$([MSBuild]::Add($(BuildNumber), 1))</NewBuildNumber>
     </PropertyGroup>
-
-    <!-- Write new build number to file -->
     <WriteLinesToFile File="$(BuildNumberFile)" Lines="$(NewBuildNumber)" Overwrite="true" />
-
-    <!-- Set version properties -->
     <PropertyGroup>
       <AssemblyVersion>$(VersionMajor).$(VersionMinor).$(VersionPatch).$(NewBuildNumber)</AssemblyVersion>
       <FileVersion>$(VersionMajor).$(VersionMinor).$(VersionPatch).$(NewBuildNumber)</FileVersion>
       <Version>$(VersionMajor).$(VersionMinor).$(VersionPatch)</Version>
     </PropertyGroup>
-
-    <!-- Show the version being used -->
-    <Message Text="Building with version: $(AssemblyVersion)" Importance="high" />
+    <Message Text="💡 Incremented build number to $(NewBuildNumber)" Importance="high" />
   </Target>
   
   <ItemGroup>
