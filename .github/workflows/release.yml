@@ -50,21 +50,19 @@ jobs:
           $version = "${{ steps.version.outputs.VERSION }}"
           $tag = "v$version"
           $releaseExists = $false
-
           Write-Host "Checking if release $tag already exists..."
-
-          try {
-            gh release view $tag --json name 2>$null
-            if ($LASTEXITCODE -eq 0) {
-              $releaseExists = $true
-              Write-Host "Release $tag already exists, skipping build steps..."
-            } else {
-              Write-Host "Release $tag does not exist, proceeding with build..."
-            }
-          } catch {
-            Write-Host "Release $tag does not exist (error checking), proceeding with build..."
+          
+          # Use Invoke-Expression to properly handle the command and suppress errors
+          $ErrorActionPreference = "SilentlyContinue"
+          $result = & gh release view $tag --json name 2>$null
+          
+          if ($LASTEXITCODE -eq 0) {
+            $releaseExists = $true
+            Write-Host "Release $tag already exists, skipping build steps..."
+          } else {
+            Write-Host "Release $tag does not exist, proceeding with build..."
           }
-
+          
           echo "RELEASE_EXISTS=$($releaseExists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -95,7 +93,6 @@ jobs:
         run: |
           Compress-Archive -Path ./publish/win-x64/* -DestinationPath ./RemuxOpt-win-x64.zip -Force
           Compress-Archive -Path ./publish/win-x86/* -DestinationPath ./RemuxOpt-win-x86.zip -Force
-
           Write-Host "Created ZIP packages:"
           Get-Item ./RemuxOpt-win-*.zip | ForEach-Object {
             Write-Host "$($_.Name): $($_.Length) bytes"
@@ -113,9 +110,7 @@ jobs:
             ./RemuxOpt-win-x86.zip
           body: |
             ## RemuxOpt v${{ steps.version.outputs.VERSION }}
-
             Auto-generated release from GitHub Actions build.
-
             ## Download
             - **Windows 64-bit**: RemuxOpt-win-x64.zip
             - **Windows 32-bit**: RemuxOpt-win-x86.zip
