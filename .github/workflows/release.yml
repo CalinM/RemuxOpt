@@ -3,114 +3,38 @@ name: Build and Release
 on:
   push:
     branches:
-      - master  # Triggers on push to master branch
+      - master
     tags:
-      - 'v*'  # Also triggers on version tags
+      - 'v*'
 
 jobs:
   build:
     runs-on: windows-latest
-    
+
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Needed for git operations
-    
+        fetch-depth: 0
+
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '8.0.x'
 
-    - name: Get version from project
-      id: get_version
-      run: |
-        # First, let's see what we're working with
-        Write-Host "Current directory contents:"
-        Get-ChildItem -Force
-        
-        # Find the project file
-        $projectFile = Get-ChildItem -Filter "*.csproj" | Select-Object -First 1
-        if (-not $projectFile) {
-          Write-Host "ERROR: No .csproj file found"
-          exit 1
-        }
-        
-        Write-Host "Found project file: $($projectFile.Name)"
-        
-        # Check if buildnumber.txt exists and what's in it
-        $buildNumberFile = "buildnumber.txt"
-        if (Test-Path $buildNumberFile) {
-          $currentBuildNumber = Get-Content $buildNumberFile -Raw
-          Write-Host "Current build number in file: '$currentBuildNumber'"
-        } else {
-          Write-Host "Build number file does not exist yet"
-        }
-        
-        # Simple approach - just do a restore and build, then check the buildnumber.txt file
-        Write-Host "Restoring packages..."
-        dotnet restore
-        if ($LASTEXITCODE -ne 0) {
-          Write-Host "Restore failed"
-          exit 1
-        }
-        
-        Write-Host "Building project to trigger version increment..."
-        dotnet build --configuration Release --verbosity detailed > build_output.txt 2>&1
-        
-        if ($LASTEXITCODE -ne 0) {
-          Write-Host "Build failed. Output:"
-          Get-Content build_output.txt
-          exit 1
-        }
-        
-        # Check what happened to the build number file
-        if (Test-Path $buildNumberFile) {
-          $newBuildNumber = (Get-Content $buildNumberFile -Raw).Trim()
-          Write-Host "New build number after build: '$newBuildNumber'"
-          
-          # Construct the version
-          $version = "1.0.0.$newBuildNumber"
-          Write-Host "Constructed version: $version"
-          
-          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
-        } else {
-          Write-Host "ERROR: Build number file still doesn't exist after build"
-          Write-Host "Build output:"
-          Get-Content build_output.txt
-          
-          # Let's also check what files were created
-          Write-Host "Files in current directory after build:"
-          Get-ChildItem -Force
-          
-          # Check bin directory
-          if (Test-Path "bin") {
-            Write-Host "Contents of bin directory:"
-            Get-ChildItem "bin" -Recurse
-          }
-          
-          exit 1
-        }
-      shell: powershell
-
-    - name: Verify version
-      run: |
-        $version = "${{ steps.get_version.outputs.VERSION }}"
-        Write-Host "Version that will be used: $version"
-        if (-not $version -or $version -eq "") {
-          Write-Host "ERROR: Version is empty"
-          exit 1
-        }
+    - name: Set version output
+      id: version
+      run: echo "VERSION=1.0.0.${{ github.run_number }}" >> $env:GITHUB_OUTPUT
       shell: powershell
 
     - name: Check if release exists
       id: check_release
       run: |
-        $version = "${{ steps.get_version.outputs.VERSION }}"
+        $version = "${{ steps.version.outputs.VERSION }}"
         $tag = "v$version"
         $releaseExists = $false
-        
+
         Write-Host "Checking if release $tag already exists..."
-        
+
         try {
           gh release view $tag --json name 2>$null
           if ($LASTEXITCODE -eq 0) {
@@ -122,7 +46,7 @@ jobs:
         } catch {
           Write-Host "Release $tag does not exist (error checking), proceeding with build..."
         }
-        
+
         echo "RELEASE_EXISTS=$($releaseExists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -131,64 +55,49 @@ jobs:
     - name: Clean for fresh build
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
       run: dotnet clean --configuration Release
-    
+
     - name: Restore dependencies
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
       run: dotnet restore
-    
-    - name: Build Release
+
+    - name: Build Release with version
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-      run: dotnet build --configuration Release --no-restore
-    
+      run: dotnet build --configuration Release --no-restore -p:BuildNumber=${{ github.run_number }}
+
     - name: Publish Windows x64
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-      run: dotnet publish --configuration Release --runtime win-x64 --self-contained true --output ./publish/win-x64 --no-restore
-    
+      run: dotnet publish --configuration Release --runtime win-x64 --self-contained true --output ./publish/win-x64 --no-restore -p:BuildNumber=${{ github.run_number }}
+
     - name: Publish Windows x86
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-      run: dotnet publish --configuration Release --runtime win-x86 --self-contained true --output ./publish/win-x86 --no-restore
-    
+      run: dotnet publish --configuration Release --runtime win-x86 --self-contained true --output ./publish/win-x86 --no-restore -p:BuildNumber=${{ github.run_number }}
+
     - name: Create ZIP packages
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
       run: |
-        if (-not (Test-Path "./publish/win-x64")) {
-          Write-Host "ERROR: win-x64 publish directory not found"
-          exit 1
-        }
-        if (-not (Test-Path "./publish/win-x86")) {
-          Write-Host "ERROR: win-x86 publish directory not found"
-          exit 1
-        }
-        
-        Write-Host "Creating ZIP packages..."
         Compress-Archive -Path ./publish/win-x64/* -DestinationPath ./RemuxOpt-win-x64.zip -Force
         Compress-Archive -Path ./publish/win-x86/* -DestinationPath ./RemuxOpt-win-x86.zip -Force
-        
-        # Verify ZIP files were created
-        if (Test-Path "./RemuxOpt-win-x64.zip") {
-          $size = (Get-Item "./RemuxOpt-win-x64.zip").Length
-          Write-Host "Created RemuxOpt-win-x64.zip ($size bytes)"
-        }
-        if (Test-Path "./RemuxOpt-win-x86.zip") {
-          $size = (Get-Item "./RemuxOpt-win-x86.zip").Length  
-          Write-Host "Created RemuxOpt-win-x86.zip ($size bytes)"
+
+        Write-Host "Created ZIP packages:"
+        Get-Item ./RemuxOpt-win-*.zip | ForEach-Object {
+          Write-Host "$($_.Name): $($_.Length) bytes"
         }
       shell: powershell
-    
+
     - name: Create Release
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: v${{ steps.get_version.outputs.VERSION }}
-        name: RemuxOpt v${{ steps.get_version.outputs.VERSION }}
+        tag_name: v${{ steps.version.outputs.VERSION }}
+        name: RemuxOpt v${{ steps.version.outputs.VERSION }}
         files: |
           ./RemuxOpt-win-x64.zip
           ./RemuxOpt-win-x86.zip
         body: |
-          ## RemuxOpt v${{ steps.get_version.outputs.VERSION }}
-          
-          Auto-generated release from assembly version.
-          
+          ## RemuxOpt v${{ steps.version.outputs.VERSION }}
+
+          Auto-generated release from GitHub Actions build.
+
           ## Download
           - **Windows 64-bit**: RemuxOpt-win-x64.zip
           - **Windows 32-bit**: RemuxOpt-win-x86.zip
