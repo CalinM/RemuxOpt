@@ -1,26 +1,30 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <Nullable>enable</Nullable>
-    <UseWindowsForms>true</UseWindowsForms>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>enable</Nullable>
 
-    <!-- Static major/minor/patch version -->
-    <VersionMajor>1</VersionMajor>
-    <VersionMinor>0</VersionMinor>
-    <VersionPatch>0</VersionPatch>
+    <!-- Version that the workflow will read -->
+    <Version>1.0.0</Version>
 
-    <!-- Injected at build time from GitHub Actions -->
-    <Version>$(VersionMajor).$(VersionMinor).$(VersionPatch).$(BuildNumber)</Version>
-    <AssemblyVersion>$(Version)</AssemblyVersion>
-    <FileVersion>$(Version)</FileVersion>
+    <!-- Optional: Additional version-related properties -->
+    <AssemblyVersion>1.0.0.15</AssemblyVersion>
+    <FileVersion>1.0.0.15</FileVersion>
+
+    <!-- Optional: Application metadata -->
+    <AssemblyTitle>RemuxOpt</AssemblyTitle>
+    <AssemblyDescription>Smart and flexible MVK remuxer</AssemblyDescription>
+    <AssemblyCompany>CalinM</AssemblyCompany>
+    <AssemblyProduct>RemuxOpt</AssemblyProduct>
+    <Copyright>Copyright © CalinM 2025</Copyright>
   </PropertyGroup>
 
+  <!-- Your dependencies here -->
   <ItemGroup>
-    <PackageReference Include="WindowsAPICodePack-Shell" Version="1.1.1" />
+    <!-- Example packages - replace with your actual dependencies -->
+    <!-- <PackageReference Include="SomePackage" Version="1.0.0" /> -->
   </ItemGroup>
 
 </Project>
