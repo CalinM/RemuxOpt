@@ -29,6 +29,8 @@
         private void InitializeComponent()
         {
             pParameters = new Panel();
+            btbOutputPath = new ButtonTextBox();
+            lbOutputFolder = new Label();
             lbMediaInfoCliVersion = new Label();
             chkRemoveFileTitle = new CheckBox();
             bRemux = new Button();
@@ -70,6 +72,8 @@
             // 
             // pParameters
             // 
+            pParameters.Controls.Add(btbOutputPath);
+            pParameters.Controls.Add(lbOutputFolder);
             pParameters.Controls.Add(lbMediaInfoCliVersion);
             pParameters.Controls.Add(chkRemoveFileTitle);
             pParameters.Controls.Add(bRemux);
@@ -93,6 +97,22 @@
             pParameters.Name = "pParameters";
             pParameters.Size = new Size(440, 759);
             pParameters.TabIndex = 0;
+            // 
+            // btbOutputPath
+            // 
+            btbOutputPath.Location = new Point(12, 575);
+            btbOutputPath.Name = "btbOutputPath";
+            btbOutputPath.Size = new Size(414, 23);
+            btbOutputPath.TabIndex = 51;
+            // 
+            // lbOutputFolder
+            // 
+            lbOutputFolder.AutoSize = true;
+            lbOutputFolder.Location = new Point(12, 557);
+            lbOutputFolder.Name = "lbOutputFolder";
+            lbOutputFolder.Size = new Size(82, 15);
+            lbOutputFolder.TabIndex = 49;
+            lbOutputFolder.Text = "Output folder:";
             // 
             // lbMediaInfoCliVersion
             // 
@@ -171,7 +191,7 @@
             // chkAutoTitleForAudioTrack
             // 
             chkAutoTitleForAudioTrack.AutoSize = true;
-            chkAutoTitleForAudioTrack.Location = new Point(352, 305);
+            chkAutoTitleForAudioTrack.Location = new Point(349, 278);
             chkAutoTitleForAudioTrack.Name = "chkAutoTitleForAudioTrack";
             chkAutoTitleForAudioTrack.Size = new Size(77, 19);
             chkAutoTitleForAudioTrack.TabIndex = 41;
@@ -183,7 +203,7 @@
             chkPreserveSubtitlesTrackTitles.AutoSize = true;
             chkPreserveSubtitlesTrackTitles.Checked = true;
             chkPreserveSubtitlesTrackTitles.CheckState = CheckState.Checked;
-            chkPreserveSubtitlesTrackTitles.Location = new Point(329, 569);
+            chkPreserveSubtitlesTrackTitles.Location = new Point(328, 514);
             chkPreserveSubtitlesTrackTitles.Name = "chkPreserveSubtitlesTrackTitles";
             chkPreserveSubtitlesTrackTitles.Size = new Size(98, 19);
             chkPreserveSubtitlesTrackTitles.TabIndex = 40;
@@ -193,7 +213,7 @@
             // btnAddSubtitleLanguage
             // 
             btnAddSubtitleLanguage.AutoSize = true;
-            btnAddSubtitleLanguage.Location = new Point(12, 570);
+            btnAddSubtitleLanguage.Location = new Point(12, 514);
             btnAddSubtitleLanguage.Name = "btnAddSubtitleLanguage";
             btnAddSubtitleLanguage.Size = new Size(93, 15);
             btnAddSubtitleLanguage.TabIndex = 39;
@@ -202,9 +222,9 @@
             // 
             // lvSubtitleTracks
             // 
-            lvSubtitleTracks.Location = new Point(12, 363);
+            lvSubtitleTracks.Location = new Point(12, 334);
             lvSubtitleTracks.Name = "lvSubtitleTracks";
-            lvSubtitleTracks.Size = new Size(415, 205);
+            lvSubtitleTracks.Size = new Size(415, 175);
             lvSubtitleTracks.TabIndex = 38;
             lvSubtitleTracks.UseCompatibleStateImageBehavior = false;
             lvSubtitleTracks.View = View.Details;
@@ -212,7 +232,7 @@
             // lbSubtitleTracks
             // 
             lbSubtitleTracks.AutoSize = true;
-            lbSubtitleTracks.Location = new Point(12, 345);
+            lbSubtitleTracks.Location = new Point(12, 316);
             lbSubtitleTracks.Name = "lbSubtitleTracks";
             lbSubtitleTracks.Size = new Size(243, 15);
             lbSubtitleTracks.TabIndex = 37;
@@ -221,7 +241,7 @@
             // lbAddAudioLanguage
             // 
             lbAddAudioLanguage.AutoSize = true;
-            lbAddAudioLanguage.Location = new Point(12, 306);
+            lbAddAudioLanguage.Location = new Point(12, 279);
             lbAddAudioLanguage.Name = "lbAddAudioLanguage";
             lbAddAudioLanguage.Size = new Size(93, 15);
             lbAddAudioLanguage.TabIndex = 36;
@@ -232,7 +252,7 @@
             // 
             lvAudioTracks.Location = new Point(12, 99);
             lvAudioTracks.Name = "lvAudioTracks";
-            lvAudioTracks.Size = new Size(415, 205);
+            lvAudioTracks.Size = new Size(415, 175);
             lvAudioTracks.TabIndex = 35;
             lvAudioTracks.UseCompatibleStateImageBehavior = false;
             lvAudioTracks.View = View.Details;
@@ -460,5 +480,7 @@
         private TextBox tbOutput;
         private CheckBox chkRemoveFileTitle;
         private Label lbMediaInfoCliVersion;
+        private Label lbOutputFolder;
+        private ButtonTextBox btbOutputPath;
     }
 }

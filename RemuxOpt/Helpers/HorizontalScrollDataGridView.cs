@@ -1,8 +1,4 @@
-﻿using System;
-using System.Drawing;
-using System.Windows.Forms;
-
-namespace RemuxOpt
+﻿namespace RemuxOpt
 {
     public class HorizontalScrollDataGridView : DataGridView
     {

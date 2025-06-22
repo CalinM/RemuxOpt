@@ -1,5 +1,7 @@
-﻿using System.ComponentModel;
+﻿using Microsoft.WindowsAPICodePack.Dialogs;
+using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 using System.Xml.Linq;
 using static System.Windows.Forms.ListViewItem;
@@ -42,7 +44,7 @@ namespace RemuxOpt
                 {
                     if (Directory.Exists(path))
                     {
-                        var files = Directory.GetFiles(path, "*.*", SearchOption.AllDirectories)
+                        var files = Directory.GetFiles(path, "*.*", SearchOption.TopDirectoryOnly)
                             .Where(f => Path.GetExtension(f).Equals(".mkv", StringComparison.OrdinalIgnoreCase) ||
                                         Path.GetExtension(f).Equals(".mp4", StringComparison.OrdinalIgnoreCase));
                         return files.Select(f => new MkvFileInfo { FileName = f });
@@ -59,6 +61,7 @@ namespace RemuxOpt
                     }
                 }).ToList();
 
+                btbOutputPath.Text = Path.Combine(Directory.Exists(paths[0]) ? paths[0] : Path.GetDirectoryName(paths[0]), "output");
 
                 if (!_backgroundWorker.IsBusy)
                 {
@@ -81,11 +84,19 @@ namespace RemuxOpt
                 }
             };
 
+            btbOutputPath.ButtonClick += BtbOutputPath_ButtonClick;
+
             bRemux.Click += (s, e) =>
             {
                 if (lvAudioTracks.Items.Count == 0 && MsgBox.Show(this, "There are no audio tracks languages configured, and this will remove all audio tracks from the remuxed files(s). Are you sure you want to continue?", "Warning",
                         MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.No)
                 {
+                    return;
+                }
+
+                if (!EnsureValidAndCreatePath(btbOutputPath.Text, out var error))
+                {
+                    MsgBox.Show(this, error, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
@@ -110,6 +121,7 @@ namespace RemuxOpt
                     UseAutoTitle = chkAutoTitleForAudioTrack.Checked,
                     RemoveAttachments = chkRemoveAttachments.Checked,
                     RemoveForcedFlags = chkRemoveAttachments.Checked,
+                    OutputFolder = btbOutputPath.Text,
                     RemoveFileTitle = chkRemoveFileTitle.Checked,
                     DefaultTrackLanguageCode = GetDefaultLanguageCode(),
                     AudioLanguageOrder = lvAudioTracks.Items.Cast<ListViewItem>()
@@ -135,6 +147,86 @@ namespace RemuxOpt
 
                 _backgroundWorker.RunWorkerAsync(context);
             };
+        }
+
+        public static bool EnsureValidAndCreatePath(string path, out string errorMessage)
+        {
+            errorMessage = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                errorMessage = "Path is empty or whitespace.";
+                return false;
+            }
+
+            // Check for invalid characters
+            if (path.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+            {
+                errorMessage = "Path contains invalid characters.";
+                return false;
+            }
+
+            // Check for absolute path
+            if (!Path.IsPathRooted(path))
+            {
+                errorMessage = "Path must be absolute.";
+                return false;
+            }
+
+            try
+            {
+                string directoryPath = path;
+
+                // If it's a file path, extract the directory
+                if (Path.HasExtension(path))
+                    directoryPath = Path.GetDirectoryName(path)!;
+
+                if (string.IsNullOrEmpty(directoryPath))
+                {
+                    errorMessage = "Could not determine the directory part of the path.";
+                    return false;
+                }
+
+                // Create the directory if it doesn't exist
+                if (!Directory.Exists(directoryPath))
+                    Directory.CreateDirectory(directoryPath);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                errorMessage = "Access denied: Unable to create directory.";
+                return false;
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Unexpected error: {ex.Message}";
+                return false;
+            }
+
+            return true;
+        }
+
+        private void BtbOutputPath_ButtonClick(object? sender, EventArgs e)
+        {
+            //var selectedPath = Helpers.SelectFolder("Please select the files location", _iniFile.ReadString("LastPath", "General"));
+            //if (string.IsNullOrEmpty(selectedPath))
+            //    return;
+
+            //_iniFile.Write("LastPath", Path.GetFullPath(selectedPath), "General");
+
+            //Helpers.GetFilesDetails(selectedPath, this);
+
+            using (var dialog = new CommonOpenFileDialog())
+            {
+                dialog.IsFolderPicker = true;
+                dialog.Title = "Please pick the output folder ...";
+                dialog.InitialDirectory = btbOutputPath.Text;
+                //dialog.DialogOpening += Dialog_DialogOpening;
+
+                if (dialog.ShowDialog() == CommonFileDialogResult.Ok)
+                {
+                    btbOutputPath.Text = dialog.FileName;
+                }
+            }
         }
 
         private string GetDefaultLanguageCode()
@@ -233,22 +325,67 @@ namespace RemuxOpt
 
                 try
                 {
+                    // Report starting progress for current file (more granular)
+                    int startProgress = Math.Max(1, (int)((double)i / files.Count * 100));
+                    var startProgressMessage = new ProgressMessage(
+                        $"Processing file {i + 1} of {files.Count}: {Path.GetFileName(file)}",
+                        string.Empty
+                    );
+                    worker.ReportProgress(startProgress, startProgressMessage);
+
+                    // Add a small delay to make progress visible for fast operations
+                    if (files.Count <= 3)
+                    {
+                        await Task.Delay(100);
+                    }
+
+                    // Report mid-progress for current file
+                    int midProgress = Math.Max(startProgress + 1, (int)((double)(i + 0.5) / files.Count * 100));
+                    var midProgressMessage = new ProgressMessage(
+                        $"Analyzing file {i + 1} of {files.Count}: {Path.GetFileName(file)}",
+                        string.Empty
+                    );
+                    worker.ReportProgress(midProgress, midProgressMessage);
+
                     var info = await mkvMetadataExtractor.ExtractInfoAsync(file);
                     workerResult.Files.Add(info);
 
-                    int percent = (int)((i + 1) / (double)files.Count * 100);
-
-                    var progressMessage = new ProgressMessage(
-                        $"Processing: {Path.GetFileName(Path.GetFileName(file))}",
+                    // Report completion progress for current file
+                    int endProgress = Math.Min(100, (int)((double)(i + 1) / files.Count * 100));
+                    var endProgressMessage = new ProgressMessage(
+                        $"Completed file {i + 1} of {files.Count}: {Path.GetFileName(file)}",
                         string.Empty
                     );
+                    worker.ReportProgress(endProgress, endProgressMessage);
 
-                    worker.ReportProgress(percent, progressMessage);
+                    // Add a small delay to make completion visible
+                    if (files.Count <= 3)
+                    {
+                        await Task.Delay(50);
+                    }
                 }
                 catch (Exception ex)
                 {
+                    // Report error but continue with progress
+                    int errorProgress = Math.Min(100, (int)((double)(i + 1) / files.Count * 100));
+                    var errorProgressMessage = new ProgressMessage(
+                        $"Error processing file {i + 1} of {files.Count}: {Path.GetFileName(file)}",
+                        string.Empty
+                    );
+                    worker.ReportProgress(errorProgress, errorProgressMessage);
+            
                     MsgBox.Show(this, $"Failed to read {file}: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
+            }
+
+            // Ensure we reach 100% at the end
+            if (workerResult.Files.Count > 0)
+            {
+                var finalProgressMessage = new ProgressMessage(
+                    $"Completed processing {workerResult.Files.Count} file(s)",
+                    string.Empty
+                );
+                worker.ReportProgress(100, finalProgressMessage);
             }
 
             return workerResult;
@@ -1015,6 +1152,122 @@ namespace RemuxOpt
                 .ToList();
         }
 
+        //private WorkerResult RunRemuxProcess(BackgroundWorkerContext context)
+        //{
+        //    var workerResult = new WorkerResult();
+
+        //    if (context.Payload is not WorkerPayload wp)
+        //    {
+        //        workerResult.TaskType = BackgroundTaskType.Unknown;
+        //        return workerResult;
+        //    }
+
+        //    workerResult.TaskType = BackgroundTaskType.RemuxSelectedFiles;
+
+        //    var selectedFiles = wp.Files;
+        //    var remuxHelper = wp.RemuxHelper;
+
+        //    var sb = new StringBuilder();
+
+        //    for (int i = 0; i < selectedFiles.Count; i++)
+        //    {
+        //        var currentFile = selectedFiles[i];
+
+        //        sb.AppendLine("Input file:");
+        //        sb.AppendLine(currentFile.FileName);
+        //        sb.AppendLine("Output file:");
+        //        sb.AppendLine(currentFile.OutputFileName);
+
+        //        var progressMessage = new ProgressMessage(
+        //            $"Processing: {Path.GetFileName(currentFile.FileName)}",
+        //            sb.ToString()
+        //        );
+
+        //        _backgroundWorker.ReportProgress(
+        //             Math.Min(100, (int)(((i + 1) / (float)selectedFiles.Count) * 100)),
+        //            progressMessage
+        //        );
+
+        //        try
+        //        {
+        //            string args = remuxHelper.BuildMkvMergeArgs(currentFile);
+        //            sb.AppendLine("Arguments:");
+        //            sb.AppendLine(args);
+        //            sb.AppendLine();
+    
+        //            var stdoutBuilder = new StringBuilder();
+        //            var stderrBuilder = new StringBuilder();
+    
+        //            var psi = new ProcessStartInfo
+        //            {
+        //                FileName = remuxHelper.MkvMergePath,
+        //                Arguments = args,
+        //                RedirectStandardOutput = true,
+        //                RedirectStandardError = true,
+        //                UseShellExecute = false,
+        //                CreateNoWindow = true,
+        //                StandardOutputEncoding = Encoding.UTF8,
+        //                StandardErrorEncoding = Encoding.UTF8
+        //            };
+    
+        //            using var process = new Process { StartInfo = psi };
+    
+        //            process.OutputDataReceived += (sender, e) => {
+        //                if (e.Data != null) stdoutBuilder.AppendLine(e.Data);
+        //            };
+    
+        //            process.ErrorDataReceived += (sender, e) => {
+        //                if (e.Data != null) stderrBuilder.AppendLine(e.Data);
+        //            };
+    
+        //            process.Start();
+        //            process.BeginOutputReadLine();
+        //            process.BeginErrorReadLine();
+        //            process.WaitForExit();
+    
+        //            string stdout = stdoutBuilder.ToString();
+        //            string stderr = stderrBuilder.ToString();
+    
+        //            if (process.ExitCode != 0)
+        //            {
+        //                sb.AppendLine($"[ERROR] mkvmerge exited with code {process.ExitCode}");
+        //                sb.AppendLine();
+        //                if (!string.IsNullOrWhiteSpace(stderr))
+        //                { 
+        //                    sb.AppendLine(stderr);
+        //                }
+                        
+        //                if (!string.IsNullOrWhiteSpace(stdout))
+        //                { 
+        //                    sb.AppendLine(stdout);
+        //                }
+        //            }
+        //            else
+        //            {
+        //                sb.AppendLine("Remux completed successfully.");
+        //                if (!string.IsNullOrWhiteSpace(stdout))
+        //                    sb.AppendLine(stdout);
+        //            }
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            sb.AppendLine($"[EXCEPTION] {ex.Message}");
+        //        }
+
+
+        //        sb.AppendLine(new string('-', 60));
+
+        //        progressMessage.RemuxLog = sb.ToString();
+
+        //        _backgroundWorker.ReportProgress(
+        //             Math.Min(100, (int)(((i + 1) / (float)selectedFiles.Count) * 100)),
+        //            progressMessage
+        //        );
+        //    }
+
+        //    return workerResult;
+        //}
+
         private WorkerResult RunRemuxProcess(BackgroundWorkerContext context)
         {
             var workerResult = new WorkerResult();
@@ -1041,23 +1294,24 @@ namespace RemuxOpt
                 sb.AppendLine("Output file:");
                 sb.AppendLine(currentFile.OutputFileName);
 
-                var progressMessage = new ProgressMessage(
-                    $"Processing: {Path.GetFileName(currentFile.FileName)}",
+                // Initial progress report for starting this file
+                var initialProgressMessage = new ProgressMessage(
+                    $"Processing file {i + 1} of {selectedFiles.Count}: {Path.GetFileName(currentFile.FileName)}",
                     sb.ToString()
                 );
 
-                _backgroundWorker.ReportProgress(
-                     Math.Min(100, (int)(((i + 1) / (float)selectedFiles.Count) * 100)),
-                    progressMessage
-                );
+                int initialProgress = CalculateOverallProgress(i, selectedFiles.Count, 0);
+                _backgroundWorker.ReportProgress(initialProgress, initialProgressMessage);
 
                 try
                 {
                     string args = remuxHelper.BuildMkvMergeArgs(currentFile);
-
                     sb.AppendLine("Arguments:");
                     sb.AppendLine(args);
                     sb.AppendLine();
+
+                    var stdoutBuilder = new StringBuilder();
+                    var stderrBuilder = new StringBuilder();
 
                     var psi = new ProcessStartInfo
                     {
@@ -1066,18 +1320,64 @@ namespace RemuxOpt
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
-                        CreateNoWindow = true
+                        CreateNoWindow = true,
+                        StandardOutputEncoding = Encoding.UTF8,
+                        StandardErrorEncoding = Encoding.UTF8
                     };
 
-                    using var process = Process.Start(psi);
-                    string stdout = process.StandardOutput.ReadToEnd();
-                    string stderr = process.StandardError.ReadToEnd();
+                    using var process = new Process { StartInfo = psi };
+
+                    process.OutputDataReceived += (sender, e) => {
+                        if (e.Data != null)
+                        {
+                            stdoutBuilder.AppendLine(e.Data);
+                    
+                            // Check for progress updates
+                            if (e.Data.StartsWith("Progress: ") && e.Data.EndsWith("%"))
+                            {
+                                string progressText = e.Data.Substring(10, e.Data.Length - 11);
+                                if (int.TryParse(progressText, out int fileProgressValue))
+                                {
+                                    // Calculate overall progress
+                                    int overallProgress = CalculateOverallProgress(i, selectedFiles.Count, fileProgressValue);
+                            
+                                    // Create progress message with current file progress
+                                    var progressMessage = new ProgressMessage(
+                                        $"Processing file {i + 1} of {selectedFiles.Count}: {Path.GetFileName(currentFile.FileName)} ({fileProgressValue}%)",
+                                        sb.ToString()
+                                    );
+                            
+                                    _backgroundWorker.ReportProgress(overallProgress, progressMessage);
+                                }
+                            }
+                        }
+                    };
+
+                    process.ErrorDataReceived += (sender, e) => {
+                        if (e.Data != null) stderrBuilder.AppendLine(e.Data);
+                    };
+
+                    process.Start();
+                    process.BeginOutputReadLine();
+                    process.BeginErrorReadLine();
                     process.WaitForExit();
+
+                    string stdout = stdoutBuilder.ToString();
+                    string stderr = stderrBuilder.ToString();
 
                     if (process.ExitCode != 0)
                     {
                         sb.AppendLine($"[ERROR] mkvmerge exited with code {process.ExitCode}");
-                        sb.AppendLine(stderr);
+                        sb.AppendLine();
+                        if (!string.IsNullOrWhiteSpace(stderr))
+                        { 
+                            sb.AppendLine(stderr);
+                        }
+                
+                        if (!string.IsNullOrWhiteSpace(stdout))
+                        { 
+                            sb.AppendLine(stdout);
+                        }
                     }
                     else
                     {
@@ -1093,15 +1393,34 @@ namespace RemuxOpt
 
                 sb.AppendLine(new string('-', 60));
 
-                progressMessage.RemuxLog = sb.ToString();
-
-                _backgroundWorker.ReportProgress(
-                     Math.Min(100, (int)(((i + 1) / (float)selectedFiles.Count) * 100)),
-                    progressMessage
+                // Final progress report for completed file
+                var finalProgressMessage = new ProgressMessage(
+                    $"Completed file {i + 1} of {selectedFiles.Count}: {Path.GetFileName(currentFile.FileName)}",
+                    sb.ToString()
                 );
+
+                int finalProgress = CalculateOverallProgress(i, selectedFiles.Count, 100);
+                _backgroundWorker.ReportProgress(finalProgress, finalProgressMessage);
             }
 
             return workerResult;
+        }
+
+        private int CalculateOverallProgress(int currentFileIndex, int totalFiles, int currentFileProgress)
+        {
+            // Each file represents (100 / totalFiles)% of the total work
+            double progressPerFile = 100.0 / totalFiles;
+    
+            // Progress from completed files
+            double completedFilesProgress = currentFileIndex * progressPerFile;
+    
+            // Progress from current file
+            double currentFileContribution = (currentFileProgress / 100.0) * progressPerFile;
+    
+            // Total progress
+            int totalProgress = (int)Math.Round(completedFilesProgress + currentFileContribution);
+    
+            return Math.Min(totalProgress, 100); // Ensure we don't exceed 100%
         }
     }
 }
