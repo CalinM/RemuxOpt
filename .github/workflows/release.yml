@@ -3,7 +3,7 @@ name: Build and Release
 on:
   push:
     branches:
-      - master  # Triggers on push to main branch
+      - master  # Triggers on push to master branch
     tags:
       - 'v*'  # Also triggers on version tags
 
@@ -53,14 +53,23 @@ jobs:
       run: |
         $version = "${{ steps.get_version.outputs.VERSION }}"
         $tag = "v$version"
+        $releaseExists = $false
+        
         try {
-          gh release view $tag
-          echo "RELEASE_EXISTS=true" >> $env:GITHUB_OUTPUT
-          echo "Release v$version already exists, skipping..."
+          $result = gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            $releaseExists = $true
+            echo "Release v$version already exists, skipping..."
+          }
         } catch {
-          echo "RELEASE_EXISTS=false" >> $env:GITHUB_OUTPUT
+          # Release doesn't exist, continue
+        }
+        
+        if (-not $releaseExists) {
           echo "Release v$version does not exist, proceeding with build..."
         }
+        
+        echo "RELEASE_EXISTS=$($releaseExists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
