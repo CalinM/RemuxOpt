@@ -24,90 +24,101 @@ jobs:
     - name: Get version from project
       id: get_version
       run: |
-        # Build the project to trigger version generation and capture detailed output
-        Write-Host "Building project to determine version..."
-        dotnet build --configuration Release --verbosity normal --no-restore 2>&1 | Tee-Object -FilePath "build.log"
+        # First, let's see what we're working with
+        Write-Host "Current directory contents:"
+        Get-ChildItem -Force
         
-        # Check if build succeeded
+        # Find the project file
+        $projectFile = Get-ChildItem -Filter "*.csproj" | Select-Object -First 1
+        if (-not $projectFile) {
+          Write-Host "ERROR: No .csproj file found"
+          exit 1
+        }
+        
+        Write-Host "Found project file: $($projectFile.Name)"
+        
+        # Check if buildnumber.txt exists and what's in it
+        $buildNumberFile = "buildnumber.txt"
+        if (Test-Path $buildNumberFile) {
+          $currentBuildNumber = Get-Content $buildNumberFile -Raw
+          Write-Host "Current build number in file: '$currentBuildNumber'"
+        } else {
+          Write-Host "Build number file does not exist yet"
+        }
+        
+        # Use MSBuild to get the version properties directly
+        Write-Host "Extracting version using MSBuild properties..."
+        
+        # Create a temporary target file to extract version info
+        $tempTarget = @"
+<Project>
+  <Target Name="GetVersion">
+    <Message Text="ASSEMBLY_VERSION=$([MSBuild]::GetAssemblyVersion())" Importance="high" Condition="'$([MSBuild]::GetAssemblyVersion())' != ''" />
+    <Message Text="FILE_VERSION=$([MSBuild]::GetFileVersion())" Importance="high" Condition="'$([MSBuild]::GetFileVersion())' != ''" />
+    <Message Text="VERSION=$([MSBuild]::GetVersion())" Importance="high" Condition="'$([MSBuild]::GetVersion())' != ''" />
+    
+    <!-- Try to get the properties directly -->
+    <Message Text="PROP_ASSEMBLY_VERSION=$([MSBuild]::GetProperty('AssemblyVersion'))" Importance="high" Condition="'$([MSBuild]::GetProperty('AssemblyVersion'))' != ''" />
+    <Message Text="PROP_FILE_VERSION=$([MSBuild]::GetProperty('FileVersion'))" Importance="high" Condition="'$([MSBuild]::GetProperty('FileVersion'))' != ''" />
+    <Message Text="PROP_VERSION=$([MSBuild]::GetProperty('Version'))" Importance="high" Condition="'$([MSBuild]::GetProperty('Version'))' != ''" />
+  </Target>
+</Project>
+"@
+        
+        # Try a different approach - just do a restore and build, then check the buildnumber.txt file
+        Write-Host "Restoring packages..."
+        dotnet restore
         if ($LASTEXITCODE -ne 0) {
-          Write-Host "Build failed with exit code $LASTEXITCODE"
-          Get-Content "build.log"
+          Write-Host "Restore failed"
           exit 1
         }
         
-        # Try to extract version from build log
-        $version = $null
-        $buildLogContent = Get-Content "build.log" -Raw
+        Write-Host "Building project to trigger version increment..."
+        dotnet build --configuration Release --verbosity detailed > build_output.txt 2>&1
         
-        # Look for the custom message we output in the project file
-        if ($buildLogContent -match "Building with version: ([\d\.]+)") {
-          $version = $matches[1]
-          Write-Host "Found version from build log: $version"
-        }
-        
-        # If we couldn't get it from the build log, try reading the buildnumber.txt file
-        if (-not $version) {
-          Write-Host "Could not extract version from build log, trying alternative methods..."
-          
-          # Check if buildnumber.txt exists and read the build number
-          $buildNumberFile = "buildnumber.txt"
-          if (Test-Path $buildNumberFile) {
-            $buildNumber = (Get-Content $buildNumberFile).Trim()
-            $version = "1.0.0.$buildNumber"
-            Write-Host "Constructed version from buildnumber.txt: $version"
-          }
-        }
-        
-        # Last resort: try to find and examine the built executable
-        if (-not $version) {
-          Write-Host "Trying to get version from built executable..."
-          
-          # Look for the executable in common output locations
-          $possiblePaths = @(
-            "./bin/Release/net8.0-windows/",
-            "./bin/Release/net8.0-windows/win-x64/",
-            "./bin/Release/net8.0/"
-          )
-          
-          $exePath = $null
-          foreach ($path in $possiblePaths) {
-            if (Test-Path $path) {
-              $exe = Get-ChildItem -Path $path -Filter "*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-              if ($exe) {
-                $exePath = $exe.FullName
-                Write-Host "Found executable at: $exePath"
-                break
-              }
-            }
-          }
-          
-          if ($exePath) {
-            try {
-              # Use System.Diagnostics.FileVersionInfo instead of loading assembly
-              $fileVersionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exePath)
-              if ($fileVersionInfo.FileVersion) {
-                $version = $fileVersionInfo.FileVersion
-                Write-Host "Found version from executable file info: $version"
-              }
-            } catch {
-              Write-Host "Error reading file version: $_"
-            }
-          }
-        }
-        
-        if (-not $version) {
-          Write-Host "ERROR: Could not determine version from any method"
-          Write-Host "Build log content:"
-          Get-Content "build.log"
-          Write-Host "Available files in bin directory:"
-          if (Test-Path "./bin") {
-            Get-ChildItem -Path "./bin" -Recurse
-          }
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "Build failed. Output:"
+          Get-Content build_output.txt
           exit 1
         }
         
-        Write-Host "Final version determined: $version"
-        echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        # Check what happened to the build number file
+        if (Test-Path $buildNumberFile) {
+          $newBuildNumber = (Get-Content $buildNumberFile -Raw).Trim()
+          Write-Host "New build number after build: '$newBuildNumber'"
+          
+          # Construct the version
+          $version = "1.0.0.$newBuildNumber"
+          Write-Host "Constructed version: $version"
+          
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        } else {
+          Write-Host "ERROR: Build number file still doesn't exist after build"
+          Write-Host "Build output:"
+          Get-Content build_output.txt
+          
+          # Let's also check what files were created
+          Write-Host "Files in current directory after build:"
+          Get-ChildItem -Force
+          
+          # Check bin directory
+          if (Test-Path "bin") {
+            Write-Host "Contents of bin directory:"
+            Get-ChildItem "bin" -Recurse
+          }
+          
+          exit 1
+        }
+      shell: powershell
+
+    - name: Verify version
+      run: |
+        $version = "${{ steps.get_version.outputs.VERSION }}"
+        Write-Host "Version that will be used: $version"
+        if (-not $version -or $version -eq "") {
+          Write-Host "ERROR: Version is empty"
+          exit 1
+        }
       shell: powershell
 
     - name: Check if release exists
@@ -120,7 +131,7 @@ jobs:
         Write-Host "Checking if release $tag already exists..."
         
         try {
-          $result = gh release view $tag 2>$null
+          gh release view $tag --json name 2>$null
           if ($LASTEXITCODE -eq 0) {
             $releaseExists = $true
             Write-Host "Release $tag already exists, skipping build steps..."
@@ -128,7 +139,7 @@ jobs:
             Write-Host "Release $tag does not exist, proceeding with build..."
           }
         } catch {
-          Write-Host "Release $tag does not exist, proceeding with build..."
+          Write-Host "Release $tag does not exist (error checking), proceeding with build..."
         }
         
         echo "RELEASE_EXISTS=$($releaseExists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
@@ -136,11 +147,15 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       shell: powershell
     
+    - name: Clean for fresh build
+      if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
+      run: dotnet clean --configuration Release
+    
     - name: Restore dependencies
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
       run: dotnet restore
     
-    - name: Build Release (Full Build)
+    - name: Build Release
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
       run: dotnet build --configuration Release --no-restore
     
@@ -155,8 +170,28 @@ jobs:
     - name: Create ZIP packages
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
       run: |
-        Compress-Archive -Path ./publish/win-x64/* -DestinationPath ./RemuxOpt-win-x64.zip
-        Compress-Archive -Path ./publish/win-x86/* -DestinationPath ./RemuxOpt-win-x86.zip
+        if (-not (Test-Path "./publish/win-x64")) {
+          Write-Host "ERROR: win-x64 publish directory not found"
+          exit 1
+        }
+        if (-not (Test-Path "./publish/win-x86")) {
+          Write-Host "ERROR: win-x86 publish directory not found"
+          exit 1
+        }
+        
+        Write-Host "Creating ZIP packages..."
+        Compress-Archive -Path ./publish/win-x64/* -DestinationPath ./RemuxOpt-win-x64.zip -Force
+        Compress-Archive -Path ./publish/win-x86/* -DestinationPath ./RemuxOpt-win-x86.zip -Force
+        
+        # Verify ZIP files were created
+        if (Test-Path "./RemuxOpt-win-x64.zip") {
+          $size = (Get-Item "./RemuxOpt-win-x64.zip").Length
+          Write-Host "Created RemuxOpt-win-x64.zip ($size bytes)"
+        }
+        if (Test-Path "./RemuxOpt-win-x86.zip") {
+          $size = (Get-Item "./RemuxOpt-win-x86.zip").Length  
+          Write-Host "Created RemuxOpt-win-x86.zip ($size bytes)"
+        }
       shell: powershell
     
     - name: Create Release
