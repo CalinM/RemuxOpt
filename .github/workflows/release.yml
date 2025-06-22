@@ -25,14 +25,25 @@ jobs:
       id: version
       run: echo "VERSION=1.0.0.${{ github.run_number }}" >> $env:GITHUB_OUTPUT
       shell: powershell
-      
+
     - name: Print version info
       run: |
         echo "Run number: ${{ github.run_number }}"
         echo "Using version: 1.0.0.${{ github.run_number }}"
         echo "VERSION (from output): ${{ steps.version.outputs.VERSION }}"
         echo "Tag: v1.0.0.${{ github.run_number }}"
-        
+      shell: powershell
+
+    - name: Verify version
+      run: |
+        $version = "${{ steps.version.outputs.VERSION }}"
+        Write-Host "Version that will be used: $version"
+        if (-not $version -or $version -eq "") {
+          Write-Error "ERROR: Version is empty"
+          exit 1
+        }
+      shell: powershell
+
     - name: Check if release exists
       id: check_release
       run: |
