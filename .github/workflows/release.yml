@@ -24,29 +24,83 @@ jobs:
     - name: Get version from project
       id: get_version
       run: |
-        # Build the project to trigger version generation
-        dotnet build --configuration Release --verbosity normal > build.log 2>&1
+        # First, let's see what we're working with
+        Write-Host "Current directory contents:"
+        Get-ChildItem -Force
         
-        # Extract version from build log
-        $versionLine = Select-String -Path "build.log" -Pattern "Building with version:" | Select-Object -Last 1
-        if ($versionLine) {
-          $version = ($versionLine.Line -split "Building with version: ")[1].Trim()
-          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
-          echo "Found version from build log: $version"
-        } else {
-          # Fallback: read from assembly after build
-          $exePath = Get-ChildItem -Path "./bin/Release/net8.0-windows/" -Filter "*.exe" | Select-Object -First 1
-          if ($exePath) {
-            $assembly = [System.Reflection.Assembly]::LoadFrom($exePath.FullName)
-            $version = $assembly.GetName().Version
-            $versionString = "$($version.Major).$($version.Minor).$($version.Build).$($version.Revision)"
-            echo "VERSION=$versionString" >> $env:GITHUB_OUTPUT
-            echo "Found version from assembly: $versionString"
-          } else {
-            echo "ERROR: Could not determine version"
-            exit 1
-          }
+        # Find the project file
+        $projectFile = Get-ChildItem -Filter "*.csproj" | Select-Object -First 1
+        if (-not $projectFile) {
+          Write-Host "ERROR: No .csproj file found"
+          exit 1
         }
+        
+        Write-Host "Found project file: $($projectFile.Name)"
+        
+        # Check if buildnumber.txt exists and what's in it
+        $buildNumberFile = "buildnumber.txt"
+        if (Test-Path $buildNumberFile) {
+          $currentBuildNumber = Get-Content $buildNumberFile -Raw
+          Write-Host "Current build number in file: '$currentBuildNumber'"
+        } else {
+          Write-Host "Build number file does not exist yet"
+        }
+        
+        # Simple approach - just do a restore and build, then check the buildnumber.txt file
+        Write-Host "Restoring packages..."
+        dotnet restore
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "Restore failed"
+          exit 1
+        }
+        
+        Write-Host "Building project to trigger version increment..."
+        dotnet build --configuration Release --verbosity detailed > build_output.txt 2>&1
+        
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "Build failed. Output:"
+          Get-Content build_output.txt
+          exit 1
+        }
+        
+        # Check what happened to the build number file
+        if (Test-Path $buildNumberFile) {
+          $newBuildNumber = (Get-Content $buildNumberFile -Raw).Trim()
+          Write-Host "New build number after build: '$newBuildNumber'"
+          
+          # Construct the version
+          $version = "1.0.0.$newBuildNumber"
+          Write-Host "Constructed version: $version"
+          
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        } else {
+          Write-Host "ERROR: Build number file still doesn't exist after build"
+          Write-Host "Build output:"
+          Get-Content build_output.txt
+          
+          # Let's also check what files were created
+          Write-Host "Files in current directory after build:"
+          Get-ChildItem -Force
+          
+          # Check bin directory
+          if (Test-Path "bin") {
+            Write-Host "Contents of bin directory:"
+            Get-ChildItem "bin" -Recurse
+          }
+          
+          exit 1
+        }
+      shell: powershell
+
+    - name: Verify version
+      run: |
+        $version = "${{ steps.get_version.outputs.VERSION }}"
+        Write-Host "Version that will be used: $version"
+        if (-not $version -or $version -eq "") {
+          Write-Host "ERROR: Version is empty"
+          exit 1
+        }
+      shell: powershell
 
     - name: Check if release exists
       id: check_release
@@ -55,45 +109,71 @@ jobs:
         $tag = "v$version"
         $releaseExists = $false
         
+        Write-Host "Checking if release $tag already exists..."
+        
         try {
-          $result = gh release view $tag 2>$null
+          gh release view $tag --json name 2>$null
           if ($LASTEXITCODE -eq 0) {
             $releaseExists = $true
-            echo "Release v$version already exists, skipping..."
+            Write-Host "Release $tag already exists, skipping build steps..."
+          } else {
+            Write-Host "Release $tag does not exist, proceeding with build..."
           }
         } catch {
-          # Release doesn't exist, continue
-        }
-        
-        if (-not $releaseExists) {
-          echo "Release v$version does not exist, proceeding with build..."
+          Write-Host "Release $tag does not exist (error checking), proceeding with build..."
         }
         
         echo "RELEASE_EXISTS=$($releaseExists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      shell: powershell
+
+    - name: Clean for fresh build
+      if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
+      run: dotnet clean --configuration Release
     
     - name: Restore dependencies
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
       run: dotnet restore
     
-    - name: Build (already done in get_version, skip if release exists)
+    - name: Build Release
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-      run: echo "Build already completed in version detection step"
+      run: dotnet build --configuration Release --no-restore
     
     - name: Publish Windows x64
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-      run: dotnet publish --configuration Release --runtime win-x64 --self-contained true --output ./publish/win-x64
+      run: dotnet publish --configuration Release --runtime win-x64 --self-contained true --output ./publish/win-x64 --no-restore
     
     - name: Publish Windows x86
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-      run: dotnet publish --configuration Release --runtime win-x86 --self-contained true --output ./publish/win-x86
+      run: dotnet publish --configuration Release --runtime win-x86 --self-contained true --output ./publish/win-x86 --no-restore
     
     - name: Create ZIP packages
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
       run: |
-        Compress-Archive -Path ./publish/win-x64/* -DestinationPath ./RemuxOpt-win-x64.zip
-        Compress-Archive -Path ./publish/win-x86/* -DestinationPath ./RemuxOpt-win-x86.zip
+        if (-not (Test-Path "./publish/win-x64")) {
+          Write-Host "ERROR: win-x64 publish directory not found"
+          exit 1
+        }
+        if (-not (Test-Path "./publish/win-x86")) {
+          Write-Host "ERROR: win-x86 publish directory not found"
+          exit 1
+        }
+        
+        Write-Host "Creating ZIP packages..."
+        Compress-Archive -Path ./publish/win-x64/* -DestinationPath ./RemuxOpt-win-x64.zip -Force
+        Compress-Archive -Path ./publish/win-x86/* -DestinationPath ./RemuxOpt-win-x86.zip -Force
+        
+        # Verify ZIP files were created
+        if (Test-Path "./RemuxOpt-win-x64.zip") {
+          $size = (Get-Item "./RemuxOpt-win-x64.zip").Length
+          Write-Host "Created RemuxOpt-win-x64.zip ($size bytes)"
+        }
+        if (Test-Path "./RemuxOpt-win-x86.zip") {
+          $size = (Get-Item "./RemuxOpt-win-x86.zip").Length  
+          Write-Host "Created RemuxOpt-win-x86.zip ($size bytes)"
+        }
+      shell: powershell
     
     - name: Create Release
       if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
