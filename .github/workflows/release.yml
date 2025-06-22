@@ -52,17 +52,28 @@ jobs:
           $releaseExists = $false
           Write-Host "Checking if release $tag already exists..."
           
-          # Use try-catch to handle the command properly
+          # Use GitHub API directly instead of gh CLI
+          $headers = @{
+            'Authorization' = "token $env:GITHUB_TOKEN"
+            'Accept' = 'application/vnd.github.v3+json'
+          }
+          
           try {
-            $null = gh release view $tag --json name 2>$null
-            $releaseExists = $true
-            Write-Host "Release $tag already exists, skipping build steps..."
+            $response = Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/tags/$tag" -Headers $headers -Method Get
+            if ($response) {
+              $releaseExists = $true
+              Write-Host "Release $tag already exists, skipping build steps..."
+            }
           } catch {
-            Write-Host "Release $tag does not exist, proceeding with build..."
+            if ($_.Exception.Response.StatusCode -eq 404) {
+              Write-Host "Release $tag does not exist, proceeding with build..."
+            } else {
+              Write-Host "Error checking release: $($_.Exception.Message)"
+              Write-Host "Proceeding with build anyway..."
+            }
           }
           
           echo "RELEASE_EXISTS=$($releaseExists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
-        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: powershell
