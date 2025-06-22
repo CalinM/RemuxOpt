@@ -114,6 +114,8 @@ namespace RemuxOpt
         public string BuildMkvMergeArgs(MkvFileInfo fileInfo)
         {
             var audioTracks = new List<AudioTrackInfo>();
+            var subtitleTracks = new List<SubtitleTrackInfo>();
+            
             string mkvJson = RunMkvMergeJson(fileInfo.FileName);
             using var mkvDoc = JsonDocument.Parse(mkvJson);
             var tracks = mkvDoc.RootElement.GetProperty("tracks");
@@ -144,6 +146,7 @@ namespace RemuxOpt
                 }
             }
 
+            // Process audio tracks
             foreach (var t in tracks.EnumerateArray().Where(t => t.GetProperty("type").GetString() == "audio"))
             {
                 int id = t.GetProperty("id").GetInt32();
@@ -152,6 +155,9 @@ namespace RemuxOpt
                 string codecId = props.TryGetProperty("codec_id", out var cd) ? cd.GetString() ?? "" : "";
                 int channels = props.TryGetProperty("audio_channels", out var ch) && ch.TryGetInt32(out var c) ? c : 0;
                 int bitRate = bitrateMap.TryGetValue(id, out var br2) ? br2 : 0;
+                bool isForced = props.TryGetProperty("forced_track", out var forced) &&
+                              (forced.ValueKind == JsonValueKind.True || 
+                               (forced.ValueKind == JsonValueKind.Number && forced.GetInt32() == 1));
 
                 audioTracks.Add(new AudioTrackInfo
                 {
@@ -161,6 +167,27 @@ namespace RemuxOpt
                     CodecId = codecId,
                     Channels = channels,
                     BitRate = bitRate,
+                    IsForced = isForced,
+                    FileName = fileInfo.FileName
+                });
+            }
+
+            // Process subtitle tracks
+            foreach (var t in tracks.EnumerateArray().Where(t => t.GetProperty("type").GetString() == "subtitles"))
+            {
+                int id = t.GetProperty("id").GetInt32();
+                var props = t.GetProperty("properties");
+                string lang = props.TryGetProperty("language", out var lp) ? lp.GetString() ?? "und" : "und";
+                bool isForced = props.TryGetProperty("forced_track", out var forced) &&
+                              (forced.ValueKind == JsonValueKind.True || 
+                               (forced.ValueKind == JsonValueKind.Number && forced.GetInt32() == 1));
+
+                subtitleTracks.Add(new SubtitleTrackInfo
+                {
+                    FileId = 0,
+                    TrackId = id,
+                    Language = lang,
+                    IsForced = isForced,
                     FileName = fileInfo.FileName
                 });
             }
@@ -197,6 +224,7 @@ namespace RemuxOpt
                             CodecId = codecId,
                             Channels = channels,
                             BitRate = bitRate,
+                            IsForced = false, // External audio files typically don't have forced flags
                             FileName = externalAudioFile.FileName
                         });
                     }
@@ -211,14 +239,19 @@ namespace RemuxOpt
                         Language = lang,
                         Channels = mediaInfo?.Channels ?? 0,
                         BitRate = mediaInfo?.BitRate ?? 0,
+                        IsForced = false, // External audio files typically don't have forced flags
                         FileName = externalAudioFile.FileName
                     });
                 }
                 externalFileIndex++;
             }
 
-            int LangPriority(string lang) => AudioLanguageOrder.IndexOf(lang) is var i && i >= 0 ? i : int.MaxValue;
-            var sortedAudio = audioTracks.OrderBy(t => LangPriority(t.Language)).ThenBy(t => t.FileId).ThenBy(t => t.TrackId).ToList();
+            // Sort audio and subtitle tracks by language preference
+            int AudioLangPriority(string lang) => AudioLanguageOrder.IndexOf(lang) is var i && i >= 0 ? i : int.MaxValue;
+            int SubtitleLangPriority(string lang) => SubtitleLanguageOrder.IndexOf(lang) is var i && i >= 0 ? i : int.MaxValue;
+            
+            var sortedAudio = audioTracks.OrderBy(t => AudioLangPriority(t.Language)).ThenBy(t => t.FileId).ThenBy(t => t.TrackId).ToList();
+            var sortedSubtitles = subtitleTracks.OrderBy(t => SubtitleLangPriority(t.Language)).ThenBy(t => t.TrackId).ToList();
 
             List<string> args = [];
             List<string> trackOrder = [];
@@ -235,10 +268,16 @@ namespace RemuxOpt
             if (RemoveAttachments)
                 args.Add("--no-attachments");
 
-            // Build track order based on sorted audio (respecting AudioLanguageOrder)
+            // Build track order based on sorted audio and subtitles
             for (int i = 0; i < sortedAudio.Count; i++)
             {
                 var track = sortedAudio[i];
+                trackOrder.Add($"{track.FileId}:{track.TrackId}");
+            }
+            
+            for (int i = 0; i < sortedSubtitles.Count; i++)
+            {
+                var track = sortedSubtitles[i];
                 trackOrder.Add($"{track.FileId}:{track.TrackId}");
             }
 
@@ -254,6 +293,7 @@ namespace RemuxOpt
 
             // Process main MKV file
             var mainFileAudioTracks = sortedAudio.Where(t => t.FileId == 0).ToList();
+            var mainFileSubtitleTracks = sortedSubtitles.Where(t => t.FileId == 0).ToList();
             var allMainTracks = tracks.EnumerateArray().ToList();
     
             // Determine which audio tracks to keep from main file
@@ -263,17 +303,35 @@ namespace RemuxOpt
                 .Select(t => t.GetProperty("id").GetInt32())
                 .ToList();
 
+            // Determine which subtitle tracks to keep from main file
+            var subtitleTracksToKeep = mainFileSubtitleTracks.Select(t => t.TrackId).ToList();
+            var allSubtitleTrackIds = allMainTracks
+                .Where(t => t.GetProperty("type").GetString() == "subtitles")
+                .Select(t => t.GetProperty("id").GetInt32())
+                .ToList();
+
             // Only include audio tracks we want
             if (audioTracksToKeep.Count < allAudioTrackIds.Count)
                 args.Add($"-a {string.Join(',', audioTracksToKeep)}");
 
-            // Add track-specific options for main file tracks
+            // Only include subtitle tracks we want
+            if (subtitleTracksToKeep.Count > 0 && subtitleTracksToKeep.Count < allSubtitleTrackIds.Count)
+                args.Add($"-s {string.Join(',', subtitleTracksToKeep)}");
+            else if (subtitleTracksToKeep.Count == 0)
+                args.Add("-S"); // No subtitles
+
+            // Add track-specific options for main file audio tracks
             foreach (var track in mainFileAudioTracks)
             {
                 bool isDefault = defaultTrack != null && track.FileId == defaultTrack.FileId && track.TrackId == defaultTrack.TrackId;
         
                 args.Add($"--language {track.TrackId}:{track.Language}");
                 args.Add($"--default-track-flag {track.TrackId}:{(isDefault ? "yes" : "no")}");
+                
+                if (RemoveForcedFlags && track.IsForced)
+                {
+                    args.Add($"--forced-track {track.TrackId}:no");
+                }
 
                 string title = "";
                 if (UseAutoTitle)
@@ -285,6 +343,18 @@ namespace RemuxOpt
                     title = $"{langName} {audioType} {channelDesc} @ {bitrateDesc}";
                 }
                 args.Add($"--track-name {track.TrackId}:\"{title}\"");
+            }
+
+            // Add track-specific options for main file subtitle tracks
+            foreach (var track in mainFileSubtitleTracks)
+            {
+                args.Add($"--language {track.TrackId}:{track.Language}");
+                args.Add($"--sub-charset {track.TrackId}:UTF-8");
+                
+                if (RemoveForcedFlags && track.IsForced)
+                {
+                    args.Add($"--forced-track {track.TrackId}:no");
+                }
             }
 
             // Add main file
@@ -303,6 +373,11 @@ namespace RemuxOpt
             
                     args.Add($"--language {track.TrackId}:{track.Language}");
                     args.Add($"--default-track-flag {track.TrackId}:{(isDefault ? "yes" : "no")}");
+                    
+                    if (RemoveForcedFlags && track.IsForced)
+                    {
+                        args.Add($"--forced-track {track.TrackId}:no");
+                    }
 
                     string title = "";
                     if (UseAutoTitle)
@@ -322,7 +397,8 @@ namespace RemuxOpt
             }
 
             // Track order at the end - this is crucial for proper ordering
-            args.Add($"--track-order {string.Join(',', trackOrder)}");
+            if (trackOrder.Count > 0)
+                args.Add($"--track-order {string.Join(',', trackOrder)}");
 
             return string.Join(' ', args);
         }

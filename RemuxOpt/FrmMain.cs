@@ -1,8 +1,10 @@
 ﻿using Microsoft.WindowsAPICodePack.Dialogs;
+using MS.WindowsAPICodePack.Internal;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using static System.Windows.Forms.ListViewItem;
 using ListView = System.Windows.Forms.ListView;
@@ -263,6 +265,85 @@ namespace RemuxOpt
             };
 
             tpGrid.Controls.Add(_dataGridViewResults);
+
+            _dataGridViewResults.CellFormatting += _dataGridViewResults_CellFormatting;
+        }
+
+        private void _dataGridViewResults_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            var dgv = sender as DataGridView;
+            if (dgv == null || e.RowIndex < 0)
+                return;
+
+            var columnName = dgv.Columns[e.ColumnIndex].Name;
+
+            // Check if the column is an Audio Lang column like "Audio0_Lang", "Audio1_Lang", ...
+            if (columnName.StartsWith("Audio") && columnName.EndsWith("_Lang"))
+            {
+                // Extract the index number from column name
+                // Example: "Audio0_Lang" -> 0
+                string indexStr = Regex.Replace(columnName, @"\D", ""); //  // \D = non-digit
+                if (int.TryParse(indexStr, out int audioIndex))
+                {
+                    // Get the forced flag value from hidden column
+                    var forcedCell = dgv.Rows[e.RowIndex].Cells[$"IsForced{audioIndex}"];
+                    bool isForced = false;
+
+                    if (forcedCell.Value != null)
+                    {
+                        if (forcedCell.Value is bool b)
+                            isForced = b;
+                        else
+                            bool.TryParse(forcedCell.Value.ToString(), out isForced);
+                    }
+
+                    if (isForced)
+                    {
+                        e.CellStyle.BackColor = Color.LightCoral; // or Color.Red
+                        e.CellStyle.ForeColor = Color.Black;
+                    }
+                    else
+                    {
+                        e.CellStyle.BackColor = Color.White;
+                        e.CellStyle.ForeColor = Color.Black;
+                    }
+                }
+            }
+
+            // Check if the column is an Subtile Lang column like "Sub0_Lang", "Sub1_Lang", ...
+            if (columnName.StartsWith("Sub") && columnName.EndsWith("_Lang"))
+            {
+                // Extract the index number from column name
+                // Example: "Sub0_Lang" -> 0
+                string indexStr = Regex.Replace(columnName, @"\D", ""); //  // \D = non-digit
+                if (int.TryParse(indexStr, out int audioIndex))
+                {
+                    // Get the forced flag value from hidden column
+                    var forcedCell = dgv.Rows[e.RowIndex].Cells[$"SubIsForced{audioIndex}"];
+                    bool isForced = false;
+
+                    if (forcedCell.Value != null)
+                    {
+                        if (forcedCell.Value is bool b)
+                            isForced = b;
+                        else
+                            bool.TryParse(forcedCell.Value.ToString(), out isForced);
+                    }
+
+                    if (isForced)
+                    {
+                        e.CellStyle.BackColor = Color.LightCoral; // or Color.Red
+                        e.CellStyle.ForeColor = Color.Black;
+                    }
+                    else
+                    {
+                        e.CellStyle.BackColor = Color.White;
+                        e.CellStyle.ForeColor = Color.Black;
+                    }
+                }
+            }
+
+            // You can do the same logic for subtitle columns if needed
         }
 
         private void InitBackgroundWorker()
@@ -433,7 +514,21 @@ namespace RemuxOpt
 
                             break;
                         case BackgroundTaskType.RemuxSelectedFiles:
-                            MsgBox.ShowAutoClose(this, "Done!", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information, MessageBoxDefaultButton.Button1, timeoutSeconds: 5);
+                            var opRes = MkvmergeErrorChecker.CheckForErrors(tbOutput.Text);
+
+                            if (opRes.HasErrors)
+                            {
+                                MsgBox.Show(this, $"mkvmerge had errors!\n\n{MkvmergeErrorChecker.GetSummary(opRes)}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                break;
+                            }
+
+                            if (opRes.HasWarnings)
+                            {
+                                MsgBox.Show(this, $"mkvmerge completed with warnings:\n\n{MkvmergeErrorChecker.GetSummary(opRes)}", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                break;
+                            }
+                            
+                            MsgBox.ShowAutoClose(this, $"All mkvmerge processes completed successfully!{Environment.NewLine}This message will auto-close in 10 seconds ...", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information, MessageBoxDefaultButton.Button1, timeoutSeconds: 10);
                             break;
                     }
                 }
@@ -442,6 +537,7 @@ namespace RemuxOpt
             progressBar.Value = 0;
             pProgress.Visible = false;
         }
+
 
 
         private void PopulateGrid(List<MkvFileInfo> files)
@@ -491,6 +587,13 @@ namespace RemuxOpt
                 _dataGridViewResults.Columns.Add($"Audio{i}_Title", $"Audio{i + 1} Title");
                 _dataGridViewResults.Columns.Add($"Audio{i}_Ch", $"Audio{i + 1} Ch");
                 _dataGridViewResults.Columns.Add($"Audio{i}_Bitrate", $"Audio{i + 1} kbps");
+
+                var forcedCol = new DataGridViewTextBoxColumn
+                {
+                    Name = $"IsForced{i}",
+                    Visible = false // hide the column
+                };
+                _dataGridViewResults.Columns.Add(forcedCol);
             }
 
             // Subtitle columns
@@ -498,6 +601,13 @@ namespace RemuxOpt
             {
                 _dataGridViewResults.Columns.Add($"Sub{i}_Lang", $"Sub{i + 1} Lang");
                 _dataGridViewResults.Columns.Add($"Sub{i}_Title", $"Sub{i + 1} Title");
+
+                var forcedCol = new DataGridViewTextBoxColumn
+                {
+                    Name = $"SubIsForced{i}",
+                    Visible = false
+                };
+                _dataGridViewResults.Columns.Add(forcedCol);
             }
 
             _dataGridViewResults.Columns.Add("Attachments", "Attachments");
@@ -539,6 +649,7 @@ namespace RemuxOpt
                     row.Add(a.Title);
                     row.Add(a.Channels);
                     row.Add(a.BitRate.HasValue ? (a.BitRate.Value / 1000).ToString() : "");
+                    row.Add(a.IsForced);
                 }
 
                 for (int i = file.AudioTracks.Count; i < maxAudio; i++)
@@ -548,6 +659,7 @@ namespace RemuxOpt
                 {
                     row.Add(s.Language);
                     row.Add(s.Title);
+                    row.Add(s.IsForced);
                 }
 
                 for (int i = file.Subtitles.Count; i < maxSubs; i++)
@@ -1151,123 +1263,6 @@ namespace RemuxOpt
                 .Select(row => (MkvFileInfo)row.Tag)
                 .ToList();
         }
-
-        //private WorkerResult RunRemuxProcess(BackgroundWorkerContext context)
-        //{
-        //    var workerResult = new WorkerResult();
-
-        //    if (context.Payload is not WorkerPayload wp)
-        //    {
-        //        workerResult.TaskType = BackgroundTaskType.Unknown;
-        //        return workerResult;
-        //    }
-
-        //    workerResult.TaskType = BackgroundTaskType.RemuxSelectedFiles;
-
-        //    var selectedFiles = wp.Files;
-        //    var remuxHelper = wp.RemuxHelper;
-
-        //    var sb = new StringBuilder();
-
-        //    for (int i = 0; i < selectedFiles.Count; i++)
-        //    {
-        //        var currentFile = selectedFiles[i];
-
-        //        sb.AppendLine("Input file:");
-        //        sb.AppendLine(currentFile.FileName);
-        //        sb.AppendLine("Output file:");
-        //        sb.AppendLine(currentFile.OutputFileName);
-
-        //        var progressMessage = new ProgressMessage(
-        //            $"Processing: {Path.GetFileName(currentFile.FileName)}",
-        //            sb.ToString()
-        //        );
-
-        //        _backgroundWorker.ReportProgress(
-        //             Math.Min(100, (int)(((i + 1) / (float)selectedFiles.Count) * 100)),
-        //            progressMessage
-        //        );
-
-        //        try
-        //        {
-        //            string args = remuxHelper.BuildMkvMergeArgs(currentFile);
-        //            sb.AppendLine("Arguments:");
-        //            sb.AppendLine(args);
-        //            sb.AppendLine();
-    
-        //            var stdoutBuilder = new StringBuilder();
-        //            var stderrBuilder = new StringBuilder();
-    
-        //            var psi = new ProcessStartInfo
-        //            {
-        //                FileName = remuxHelper.MkvMergePath,
-        //                Arguments = args,
-        //                RedirectStandardOutput = true,
-        //                RedirectStandardError = true,
-        //                UseShellExecute = false,
-        //                CreateNoWindow = true,
-        //                StandardOutputEncoding = Encoding.UTF8,
-        //                StandardErrorEncoding = Encoding.UTF8
-        //            };
-    
-        //            using var process = new Process { StartInfo = psi };
-    
-        //            process.OutputDataReceived += (sender, e) => {
-        //                if (e.Data != null) stdoutBuilder.AppendLine(e.Data);
-        //            };
-    
-        //            process.ErrorDataReceived += (sender, e) => {
-        //                if (e.Data != null) stderrBuilder.AppendLine(e.Data);
-        //            };
-    
-        //            process.Start();
-        //            process.BeginOutputReadLine();
-        //            process.BeginErrorReadLine();
-        //            process.WaitForExit();
-    
-        //            string stdout = stdoutBuilder.ToString();
-        //            string stderr = stderrBuilder.ToString();
-    
-        //            if (process.ExitCode != 0)
-        //            {
-        //                sb.AppendLine($"[ERROR] mkvmerge exited with code {process.ExitCode}");
-        //                sb.AppendLine();
-        //                if (!string.IsNullOrWhiteSpace(stderr))
-        //                { 
-        //                    sb.AppendLine(stderr);
-        //                }
-                        
-        //                if (!string.IsNullOrWhiteSpace(stdout))
-        //                { 
-        //                    sb.AppendLine(stdout);
-        //                }
-        //            }
-        //            else
-        //            {
-        //                sb.AppendLine("Remux completed successfully.");
-        //                if (!string.IsNullOrWhiteSpace(stdout))
-        //                    sb.AppendLine(stdout);
-        //            }
-        //        }
-        //        catch (Exception ex)
-        //        {
-        //            sb.AppendLine($"[EXCEPTION] {ex.Message}");
-        //        }
-
-
-        //        sb.AppendLine(new string('-', 60));
-
-        //        progressMessage.RemuxLog = sb.ToString();
-
-        //        _backgroundWorker.ReportProgress(
-        //             Math.Min(100, (int)(((i + 1) / (float)selectedFiles.Count) * 100)),
-        //            progressMessage
-        //        );
-        //    }
-
-        //    return workerResult;
-        //}
-
         private WorkerResult RunRemuxProcess(BackgroundWorkerContext context)
         {
             var workerResult = new WorkerResult();

@@ -25,12 +25,14 @@ namespace RemuxOpt
                 var lang = props?["language_ietf"]?.ToString() ?? props?["language"]?.ToString();
                 var title = props?["track_name"]?.ToString();
                 var channels = props?["audio_channels"]?.GetValue<int>() ?? 0;
+                var isForced = props?["forced_track"] != null && bool.TryParse(props["forced_track"]?.ToString(), out var f) ? f : false;
 
                 result.AudioTracks.Add(new AudioTrackInfo
                 {
                     Language = lang,
                     Title = title,
-                    Channels = channels
+                    Channels = channels,
+                    IsForced = isForced,
                 });
             }
 
@@ -67,11 +69,13 @@ namespace RemuxOpt
                 var props = track["properties"];
                 var lang = props?["language_ietf"]?.ToString() ?? props?["language"]?.ToString();
                 var title = props?["track_name"]?.ToString();
+                var isForced = props?["forced_track"] != null && bool.TryParse(props["forced_track"]?.ToString(), out var f) ? f : false;
 
-                result.Subtitles.Add(new SubtitleTrack
+                result.Subtitles.Add(new SubtitleTrackInfo
                 {
                     Language = lang,
-                    Title = title
+                    Title = title,
+                    IsForced = isForced
                 });
             }
 

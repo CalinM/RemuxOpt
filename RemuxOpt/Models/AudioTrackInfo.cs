@@ -4,6 +4,7 @@
     {
         public int FileId { get; set; }        // 0 = main file, 1+ = external files
         public int TrackId { get; set; }       // track ID inside that file
+        public bool IsForced { get; set; }
         public string Language { get; set; }   // e.g. "eng", "dut"
         public string CodecId { get; set; }    // for title generation
         public int Channels { get; set; }

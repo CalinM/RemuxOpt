@@ -15,7 +15,7 @@
         }
         public List<AudioTrackInfo> AudioTracks { get; set; } = [];
         public List<ExternalAudioTrack> ExternalAudioFiles { get; set; } = [];
-        public List<SubtitleTrack> Subtitles { get; set; } = [];
+        public List<SubtitleTrackInfo> Subtitles { get; set; } = [];
         public List<Attachment> Attachments { get; set; } = [];
     }
 }
