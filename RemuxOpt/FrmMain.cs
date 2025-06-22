@@ -3,6 +3,7 @@ using MS.WindowsAPICodePack.Internal;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -20,6 +21,10 @@ namespace RemuxOpt
         public FrmMain()
         {
             InitializeComponent();
+
+            var version = FileVersionInfo.GetVersionInfo(Assembly.GetExecutingAssembly().Location);
+            Text += $" - v{version.FileVersion}";
+
             Load += FrmMain_Load;
             FormClosing += FrmMain_FormClosing;
 
@@ -209,14 +214,6 @@ namespace RemuxOpt
 
         private void BtbOutputPath_ButtonClick(object? sender, EventArgs e)
         {
-            //var selectedPath = Helpers.SelectFolder("Please select the files location", _iniFile.ReadString("LastPath", "General"));
-            //if (string.IsNullOrEmpty(selectedPath))
-            //    return;
-
-            //_iniFile.Write("LastPath", Path.GetFullPath(selectedPath), "General");
-
-            //Helpers.GetFilesDetails(selectedPath, this);
-
             using (var dialog = new CommonOpenFileDialog())
             {
                 dialog.IsFolderPicker = true;
@@ -528,7 +525,10 @@ namespace RemuxOpt
                                 break;
                             }
                             
-                            MsgBox.ShowAutoClose(this, $"All mkvmerge processes completed successfully!{Environment.NewLine}This message will auto-close in 10 seconds ...", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information, MessageBoxDefaultButton.Button1, timeoutSeconds: 10);
+                            MsgBoxEnhanced.ShowAutoClose(this, "Operation completed successfully!", "Success",
+                                MessageBoxButtons.OK, MessageBoxIcon.Information, 
+                                MessageBoxDefaultButton.Button1, timeoutSeconds: 5);
+
                             break;
                     }
                 }

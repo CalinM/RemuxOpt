@@ -95,7 +95,7 @@
             pParameters.Dock = DockStyle.Left;
             pParameters.Location = new Point(0, 0);
             pParameters.Name = "pParameters";
-            pParameters.Size = new Size(440, 759);
+            pParameters.Size = new Size(440, 761);
             pParameters.TabIndex = 0;
             // 
             // btbOutputPath
@@ -118,7 +118,7 @@
             // 
             lbMediaInfoCliVersion.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             lbMediaInfoCliVersion.AutoEllipsis = true;
-            lbMediaInfoCliVersion.Location = new Point(12, 740);
+            lbMediaInfoCliVersion.Location = new Point(12, 742);
             lbMediaInfoCliVersion.Name = "lbMediaInfoCliVersion";
             lbMediaInfoCliVersion.Size = new Size(414, 15);
             lbMediaInfoCliVersion.TabIndex = 48;
@@ -149,7 +149,7 @@
             // 
             lbFFprobeVersion.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             lbFFprobeVersion.AutoEllipsis = true;
-            lbFFprobeVersion.Location = new Point(12, 724);
+            lbFFprobeVersion.Location = new Point(12, 726);
             lbFFprobeVersion.Name = "lbFFprobeVersion";
             lbFFprobeVersion.Size = new Size(414, 15);
             lbFFprobeVersion.TabIndex = 45;
@@ -158,7 +158,7 @@
             // lbMkvVersion
             // 
             lbMkvVersion.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            lbMkvVersion.Location = new Point(12, 708);
+            lbMkvVersion.Location = new Point(12, 710);
             lbMkvVersion.Name = "lbMkvVersion";
             lbMkvVersion.Size = new Size(414, 15);
             lbMkvVersion.TabIndex = 44;
@@ -300,7 +300,7 @@
             pFiles.Dock = DockStyle.Fill;
             pFiles.Location = new Point(440, 0);
             pFiles.Name = "pFiles";
-            pFiles.Size = new Size(846, 759);
+            pFiles.Size = new Size(844, 761);
             pFiles.TabIndex = 1;
             // 
             // pProgress
@@ -309,16 +309,16 @@
             pProgress.Controls.Add(progressLabel);
             pProgress.Controls.Add(progressBar);
             pProgress.Dock = DockStyle.Bottom;
-            pProgress.Location = new Point(0, 669);
+            pProgress.Location = new Point(0, 671);
             pProgress.Name = "pProgress";
-            pProgress.Size = new Size(846, 90);
+            pProgress.Size = new Size(844, 90);
             pProgress.TabIndex = 5;
             pProgress.Visible = false;
             // 
             // btnCancelWorker
             // 
             btnCancelWorker.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnCancelWorker.Location = new Point(739, 57);
+            btnCancelWorker.Location = new Point(737, 57);
             btnCancelWorker.Name = "btnCancelWorker";
             btnCancelWorker.Size = new Size(95, 23);
             btnCancelWorker.TabIndex = 6;
@@ -339,7 +339,7 @@
             progressBar.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             progressBar.Location = new Point(10, 30);
             progressBar.Name = "progressBar";
-            progressBar.Size = new Size(824, 17);
+            progressBar.Size = new Size(822, 17);
             progressBar.TabIndex = 4;
             // 
             // tcGrid
@@ -351,7 +351,7 @@
             tcGrid.Location = new Point(0, 0);
             tcGrid.Name = "tcGrid";
             tcGrid.SelectedIndex = 0;
-            tcGrid.Size = new Size(846, 759);
+            tcGrid.Size = new Size(844, 761);
             tcGrid.TabIndex = 4;
             // 
             // tpGrid
@@ -360,7 +360,7 @@
             tpGrid.Location = new Point(4, 24);
             tpGrid.Name = "tpGrid";
             tpGrid.Padding = new Padding(3);
-            tpGrid.Size = new Size(838, 731);
+            tpGrid.Size = new Size(836, 733);
             tpGrid.TabIndex = 0;
             tpGrid.Text = "Table-view";
             tpGrid.UseVisualStyleBackColor = true;
@@ -371,7 +371,7 @@
             lbDragFolderHere.Dock = DockStyle.Fill;
             lbDragFolderHere.Location = new Point(3, 3);
             lbDragFolderHere.Name = "lbDragFolderHere";
-            lbDragFolderHere.Size = new Size(832, 725);
+            lbDragFolderHere.Size = new Size(830, 727);
             lbDragFolderHere.TabIndex = 3;
             lbDragFolderHere.Text = "Drag a folder (or files) here ...";
             lbDragFolderHere.TextAlign = ContentAlignment.MiddleCenter;
@@ -427,9 +427,10 @@
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(1286, 759);
+            ClientSize = new Size(1284, 761);
             Controls.Add(pFiles);
             Controls.Add(pParameters);
+            MinimumSize = new Size(1300, 800);
             Name = "FrmMain";
             Text = "RemuxOpt";
             FormClosing += FrmMain_FormClosing;
