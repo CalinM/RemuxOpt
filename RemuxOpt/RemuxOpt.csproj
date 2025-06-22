@@ -1,8 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
@@ -15,16 +16,14 @@
 
     <!-- Optional: Application metadata -->
     <AssemblyTitle>RemuxOpt</AssemblyTitle>
-    <AssemblyDescription>Smart and flexible MVK remuxer</AssemblyDescription>
-    <AssemblyCompany>CalinM</AssemblyCompany>
+    <AssemblyDescription>Your application description</AssemblyDescription>
+    <AssemblyCompany>Your Company</AssemblyCompany>
     <AssemblyProduct>RemuxOpt</AssemblyProduct>
-    <Copyright>Copyright © CalinM 2025</Copyright>
+    <Copyright>Copyright © Your Company 2025</Copyright>
   </PropertyGroup>
 
-  <!-- Your dependencies here -->
   <ItemGroup>
-    <!-- Example packages - replace with your actual dependencies -->
-    <!-- <PackageReference Include="SomePackage" Version="1.0.0" /> -->
+    <PackageReference Include="WindowsAPICodePack-Shell" Version="1.1.1" />
   </ItemGroup>
 
 </Project>
