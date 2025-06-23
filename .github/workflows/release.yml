@@ -93,11 +93,7 @@ jobs:
 
       - name: Restore dependencies
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-        run: dotnet restore "${{ steps.version.outputs.PROJECT_PATH }}" --runtime win-x64
-
-      - name: Restore dependencies for x86
-        if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-        run: dotnet restore "${{ steps.version.outputs.PROJECT_PATH }}" --runtime win-x86
+        run: dotnet restore "${{ steps.version.outputs.PROJECT_PATH }}"
 
       - name: Build Release
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
@@ -105,11 +101,11 @@ jobs:
 
       - name: Publish Windows x64
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-        run: dotnet publish "${{ steps.version.outputs.PROJECT_PATH }}" --configuration Release --runtime win-x64 --self-contained true --output ./publish/win-x64 --no-restore
+        run: dotnet publish "${{ steps.version.outputs.PROJECT_PATH }}" --configuration Release --runtime win-x64 --self-contained true --output ./publish/win-x64
 
       - name: Publish Windows x86
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-        run: dotnet publish "${{ steps.version.outputs.PROJECT_PATH }}" --configuration Release --runtime win-x86 --self-contained true --output ./publish/win-x86 --no-restore
+        run: dotnet publish "${{ steps.version.outputs.PROJECT_PATH }}" --configuration Release --runtime win-x86 --self-contained true --output ./publish/win-x86
 
       - name: Create ZIP packages
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
