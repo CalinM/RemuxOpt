@@ -93,7 +93,11 @@ jobs:
 
       - name: Restore dependencies
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-        run: dotnet restore "${{ steps.version.outputs.PROJECT_PATH }}"
+        run: dotnet restore "${{ steps.version.outputs.PROJECT_PATH }}" --runtime win-x64
+
+      - name: Restore dependencies for x86
+        if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
+        run: dotnet restore "${{ steps.version.outputs.PROJECT_PATH }}" --runtime win-x86
 
       - name: Build Release
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
