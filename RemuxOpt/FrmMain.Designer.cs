@@ -61,6 +61,7 @@
             txtFilesDetails = new TextBox();
             tpOutput = new TabPage();
             tbOutput = new TextBox();
+            bOptions = new Button();
             pParameters.SuspendLayout();
             pFiles.SuspendLayout();
             pProgress.SuspendLayout();
@@ -72,6 +73,7 @@
             // 
             // pParameters
             // 
+            pParameters.Controls.Add(bOptions);
             pParameters.Controls.Add(btbOutputPath);
             pParameters.Controls.Add(lbOutputFolder);
             pParameters.Controls.Add(lbMediaInfoCliVersion);
@@ -95,7 +97,7 @@
             pParameters.Dock = DockStyle.Left;
             pParameters.Location = new Point(0, 0);
             pParameters.Name = "pParameters";
-            pParameters.Size = new Size(440, 761);
+            pParameters.Size = new Size(440, 777);
             pParameters.TabIndex = 0;
             // 
             // btbOutputPath
@@ -118,7 +120,7 @@
             // 
             lbMediaInfoCliVersion.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             lbMediaInfoCliVersion.AutoEllipsis = true;
-            lbMediaInfoCliVersion.Location = new Point(12, 742);
+            lbMediaInfoCliVersion.Location = new Point(12, 758);
             lbMediaInfoCliVersion.Name = "lbMediaInfoCliVersion";
             lbMediaInfoCliVersion.Size = new Size(414, 15);
             lbMediaInfoCliVersion.TabIndex = 48;
@@ -138,7 +140,7 @@
             // 
             // bRemux
             // 
-            bRemux.Location = new Point(332, 669);
+            bRemux.Location = new Point(332, 679);
             bRemux.Name = "bRemux";
             bRemux.Size = new Size(95, 23);
             bRemux.TabIndex = 46;
@@ -149,7 +151,7 @@
             // 
             lbFFprobeVersion.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             lbFFprobeVersion.AutoEllipsis = true;
-            lbFFprobeVersion.Location = new Point(12, 726);
+            lbFFprobeVersion.Location = new Point(12, 742);
             lbFFprobeVersion.Name = "lbFFprobeVersion";
             lbFFprobeVersion.Size = new Size(414, 15);
             lbFFprobeVersion.TabIndex = 45;
@@ -158,7 +160,7 @@
             // lbMkvVersion
             // 
             lbMkvVersion.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            lbMkvVersion.Location = new Point(12, 710);
+            lbMkvVersion.Location = new Point(12, 726);
             lbMkvVersion.Name = "lbMkvVersion";
             lbMkvVersion.Size = new Size(414, 15);
             lbMkvVersion.TabIndex = 44;
@@ -300,7 +302,7 @@
             pFiles.Dock = DockStyle.Fill;
             pFiles.Location = new Point(440, 0);
             pFiles.Name = "pFiles";
-            pFiles.Size = new Size(844, 761);
+            pFiles.Size = new Size(844, 777);
             pFiles.TabIndex = 1;
             // 
             // pProgress
@@ -309,7 +311,7 @@
             pProgress.Controls.Add(progressLabel);
             pProgress.Controls.Add(progressBar);
             pProgress.Dock = DockStyle.Bottom;
-            pProgress.Location = new Point(0, 671);
+            pProgress.Location = new Point(0, 687);
             pProgress.Name = "pProgress";
             pProgress.Size = new Size(844, 90);
             pProgress.TabIndex = 5;
@@ -351,7 +353,7 @@
             tcGrid.Location = new Point(0, 0);
             tcGrid.Name = "tcGrid";
             tcGrid.SelectedIndex = 0;
-            tcGrid.Size = new Size(844, 761);
+            tcGrid.Size = new Size(844, 777);
             tcGrid.TabIndex = 4;
             // 
             // tpGrid
@@ -360,7 +362,7 @@
             tpGrid.Location = new Point(4, 24);
             tpGrid.Name = "tpGrid";
             tpGrid.Padding = new Padding(3);
-            tpGrid.Size = new Size(836, 733);
+            tpGrid.Size = new Size(836, 749);
             tpGrid.TabIndex = 0;
             tpGrid.Text = "Table-view";
             tpGrid.UseVisualStyleBackColor = true;
@@ -371,7 +373,7 @@
             lbDragFolderHere.Dock = DockStyle.Fill;
             lbDragFolderHere.Location = new Point(3, 3);
             lbDragFolderHere.Name = "lbDragFolderHere";
-            lbDragFolderHere.Size = new Size(830, 727);
+            lbDragFolderHere.Size = new Size(830, 743);
             lbDragFolderHere.TabIndex = 3;
             lbDragFolderHere.Text = "Drag a folder (or files) here ...";
             lbDragFolderHere.TextAlign = ContentAlignment.MiddleCenter;
@@ -382,7 +384,7 @@
             tpTextView.Location = new Point(4, 24);
             tpTextView.Name = "tpTextView";
             tpTextView.Padding = new Padding(3);
-            tpTextView.Size = new Size(838, 731);
+            tpTextView.Size = new Size(836, 733);
             tpTextView.TabIndex = 1;
             tpTextView.Text = "Text-view";
             tpTextView.UseVisualStyleBackColor = true;
@@ -396,7 +398,7 @@
             txtFilesDetails.Name = "txtFilesDetails";
             txtFilesDetails.ReadOnly = true;
             txtFilesDetails.ScrollBars = ScrollBars.Vertical;
-            txtFilesDetails.Size = new Size(832, 725);
+            txtFilesDetails.Size = new Size(830, 727);
             txtFilesDetails.TabIndex = 1;
             // 
             // tpOutput
@@ -405,7 +407,7 @@
             tpOutput.Location = new Point(4, 24);
             tpOutput.Name = "tpOutput";
             tpOutput.Padding = new Padding(3);
-            tpOutput.Size = new Size(838, 731);
+            tpOutput.Size = new Size(836, 733);
             tpOutput.TabIndex = 2;
             tpOutput.Text = "Output";
             tpOutput.UseVisualStyleBackColor = true;
@@ -420,14 +422,23 @@
             tbOutput.Name = "tbOutput";
             tbOutput.ReadOnly = true;
             tbOutput.ScrollBars = ScrollBars.Vertical;
-            tbOutput.Size = new Size(832, 725);
+            tbOutput.Size = new Size(830, 727);
             tbOutput.TabIndex = 2;
+            // 
+            // bOptions
+            // 
+            bOptions.Location = new Point(16, 679);
+            bOptions.Name = "bOptions";
+            bOptions.Size = new Size(95, 23);
+            bOptions.TabIndex = 52;
+            bOptions.Text = "Options";
+            bOptions.UseVisualStyleBackColor = true;
             // 
             // FrmMain
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(1284, 761);
+            ClientSize = new Size(1284, 777);
             Controls.Add(pFiles);
             Controls.Add(pParameters);
             MinimumSize = new Size(1300, 800);
@@ -483,5 +494,6 @@
         private Label lbMediaInfoCliVersion;
         private Label lbOutputFolder;
         private ButtonTextBox btbOutputPath;
+        private Button bOptions;
     }
 }

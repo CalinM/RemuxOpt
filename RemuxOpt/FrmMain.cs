@@ -1,8 +1,8 @@
 ﻿using Microsoft.WindowsAPICodePack.Dialogs;
-using MS.WindowsAPICodePack.Internal;
+using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.IO;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -17,7 +17,7 @@ namespace RemuxOpt
     {
         private BackgroundWorker _backgroundWorker;
         private HorizontalScrollDataGridView _dataGridViewResults;
-
+        private AppOptions _appOptions = new AppOptions();
         public FrmMain()
         {
             InitializeComponent();
@@ -44,6 +44,7 @@ namespace RemuxOpt
             pFiles.DragDrop += async (s, e) =>
             {
                 lbDragFolderHere.Visible = false;
+                ClearPreviousFilesDetails();
 
                 var paths = (string[])e.Data.GetData(DataFormats.FileDrop);
 
@@ -51,12 +52,13 @@ namespace RemuxOpt
                 {
                     if (Directory.Exists(path))
                     {
-                        var files = Directory.GetFiles(path, "*.*", SearchOption.TopDirectoryOnly)
+                        var files = Directory.GetFiles(path, "*.*", _appOptions.ReadFilesRecursively ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
                             .Where(f => Path.GetExtension(f).Equals(".mkv", StringComparison.OrdinalIgnoreCase) ||
                                         Path.GetExtension(f).Equals(".mp4", StringComparison.OrdinalIgnoreCase));
+
                         return files.Select(f => new MkvFileInfo { FileName = f });
                     }
-                    else if (File.Exists(path) && 
+                    else if (File.Exists(path) &&
                             (Path.GetExtension(path).Equals(".mkv", StringComparison.OrdinalIgnoreCase) ||
                              Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase)))
                     {
@@ -67,8 +69,6 @@ namespace RemuxOpt
                         return Enumerable.Empty<MkvFileInfo>();
                     }
                 }).ToList();
-
-                btbOutputPath.Text = Path.Combine(Directory.Exists(paths[0]) ? paths[0] : Path.GetDirectoryName(paths[0]), "output");
 
                 if (!_backgroundWorker.IsBusy)
                 {
@@ -112,7 +112,7 @@ namespace RemuxOpt
                 if (selectedFiles.Count == 0)
                 {
                     MsgBox.Show(this, "No files selected for remuxing.", "No Selection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;;
+                    return;
                 }
 
                 if (_backgroundWorker.IsBusy)
@@ -154,6 +154,25 @@ namespace RemuxOpt
 
                 _backgroundWorker.RunWorkerAsync(context);
             };
+
+            bOptions.Click += (s, e) =>
+            {
+                using (var optionsForm = new FrmOptions(_appOptions))
+                {
+                    if (optionsForm.ShowDialog(this) == DialogResult.OK)
+                    {
+                        _appOptions.SaveOptions();
+                        btbOutputPath.Enabled = !_appOptions.ReadFilesRecursively;
+                    }
+                }
+            };
+        }
+
+        private void ClearPreviousFilesDetails()
+        {
+            _dataGridViewResults.ClearWithHeaderCheckboxCleanup();
+            txtFilesDetails.Clear();
+            tbOutput.Clear();
         }
 
         public static bool EnsureValidAndCreatePath(string path, out string errorMessage)
@@ -246,7 +265,7 @@ namespace RemuxOpt
         private void InitGrid()
         {
             _dataGridViewResults = new HorizontalScrollDataGridView
-            {                
+            {
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 BackgroundColor = SystemColors.Window,
                 AllowUserToAddRows = false,
@@ -377,7 +396,7 @@ namespace RemuxOpt
                     break;
 
                 case BackgroundTaskType.RemuxSelectedFiles:
-                    e.Result = RunRemuxProcess(context);
+                    e.Result = RunRemuxProcess(context, _backgroundWorker, e);
                     break;
             }
         }
@@ -451,7 +470,7 @@ namespace RemuxOpt
                         string.Empty
                     );
                     worker.ReportProgress(errorProgress, errorProgressMessage);
-            
+
                     MsgBox.Show(this, $"Failed to read {file}: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
@@ -505,8 +524,14 @@ namespace RemuxOpt
                             }
                             else
                             {
-                                PopulateGrid(workerResult.Files);
+                                PopulateGrid(workerResult.Files.OrderBy(o => o.FilePath).ThenBy(o => o.FileName).ToList());
                                 BuildTextView(workerResult.Files);
+
+                                btbOutputPath.Text =
+                                    workerResult.Files.Select(x => x.FilePath).Distinct().Count() == 1
+                                        ? Path.Combine(workerResult.Files.FirstOrDefault().FilePath, "Output")
+                                        : "\\Output";
+
                             }
 
                             break;
@@ -524,9 +549,9 @@ namespace RemuxOpt
                                 MsgBox.Show(this, $"mkvmerge completed with warnings:\n\n{MkvmergeErrorChecker.GetSummary(opRes)}", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                                 break;
                             }
-                            
+
                             MsgBoxEnhanced.ShowAutoClose(this, "Operation completed successfully!", "Success",
-                                MessageBoxButtons.OK, MessageBoxIcon.Information, 
+                                MessageBoxButtons.OK, MessageBoxIcon.Information,
                                 MessageBoxDefaultButton.Button1, timeoutSeconds: 5);
 
                             break;
@@ -563,14 +588,23 @@ namespace RemuxOpt
             _dataGridViewResults.Columns.Insert(0, checkCol);
 
             // Base columns
-            var col = new DataGridViewTextBoxColumn
-            {
-                Name = "Filename",
-                HeaderText = "File name",
-                Frozen = true
-            };
+            _dataGridViewResults.Columns.Add(
+                new DataGridViewTextBoxColumn
+                {
+                    Name = "Filename",
+                    HeaderText = "File name",
+                    Frozen = true
+                });
 
-            _dataGridViewResults.Columns.Add(col);
+            if (_appOptions.ReadFilesRecursively)
+            {
+                _dataGridViewResults.Columns.Add(
+                    new DataGridViewTextBoxColumn
+                    {
+                        Name = "FilePath",
+                        HeaderText = "File path"
+                    });
+            }
 
             // External audio column
             if (hasExternalAudio)
@@ -635,6 +669,11 @@ namespace RemuxOpt
                     Path.GetFileName(file.FileName)
                 };
 
+                if (_appOptions.ReadFilesRecursively)
+                {
+                    row.Add(Path.GetDirectoryName(file.FileName));
+                }
+
                 if (hasExternalAudio)
                 {
                     var eaf = file.ExternalAudioFiles.FirstOrDefault(); //only one is supported for display and process (todo more)
@@ -686,18 +725,23 @@ namespace RemuxOpt
             _dataGridViewResults.HeaderCheckState = true;
 
             for (int i = 0; i < _dataGridViewResults.Rows.Count; i++)
-            {            
+            {
                 //Filename/fixed column
                 _dataGridViewResults.Rows[i].Cells[1].Style.BackColor = Color.WhiteSmoke;
-                
+
                 if (hasExternalAudio)
                 {
-                    // External audio columns
-                    _dataGridViewResults.Rows[i].Cells[2].Style.BackColor = Color.AntiqueWhite;
-                    _dataGridViewResults.Rows[i].Cells[3].Style.BackColor = Color.AntiqueWhite;
-                }
+                    int? extTypeColIndex = _dataGridViewResults.Columns["ExternalAudioType"]?.Index;
+                    int? extLangColIndex = _dataGridViewResults.Columns["ExternalAudioLanguage"]?.Index;
 
+                    if (extTypeColIndex.HasValue)
+                        _dataGridViewResults.Rows[i].Cells[extTypeColIndex.Value].Style.BackColor = Color.AntiqueWhite;
+
+                    if (extLangColIndex.HasValue)
+                        _dataGridViewResults.Rows[i].Cells[extLangColIndex.Value].Style.BackColor = Color.AntiqueWhite;
+                }
             }
+
             _dataGridViewResults.ResumeLayout();
         }
 
@@ -705,11 +749,15 @@ namespace RemuxOpt
         {
             var sb = new StringBuilder();
 
-            foreach (var info in files)
+            foreach (var file in files)
             {
-                sb.AppendLine($"File: {Path.GetFileName(info.FileName)}");
-
-                foreach (var audio in info.AudioTracks)
+                sb.AppendLine($"File: {Path.GetFileName(file.FileName)}");
+                if (_appOptions.ReadFilesRecursively)
+                {
+                    sb.AppendLine($"Path: {Path.GetDirectoryName(file.FileName)}");
+                }
+                
+                foreach (var audio in file.AudioTracks)
                 {
                     var channels = audio.Channels switch
                     {
@@ -724,12 +772,12 @@ namespace RemuxOpt
                     sb.AppendLine($"  Audio [{audio.Language}]: {channels} @ {bitrate} - {audio.Title}");
                 }
 
-                foreach (var sub in info.Subtitles)
+                foreach (var sub in file.Subtitles)
                 {
                     sb.AppendLine($"  Subtitle [{sub.Language}]: {sub.Title}");
                 }
 
-                foreach (var att in info.Attachments)
+                foreach (var att in file.Attachments)
                 {
                     sb.AppendLine($"  Attachment: {att.FileName} ({att.MimeType})");
                 }
@@ -743,54 +791,14 @@ namespace RemuxOpt
 
         private void FrmMain_FormClosing(object? sender, FormClosingEventArgs e)
         {
-            SaveFormSettings(this); // Save window size, state, and position            
+            _appOptions.SaveFormSettings(this);
         }
 
         private void FrmMain_Load(object? sender, EventArgs e)
         {
-            LoadFormSettings(this);
+            _appOptions.LoadFormSettings(this);
             bRemux.Enabled = CheckToolsInPath();
-        }
-
-        private static void SaveFormSettings(Form mainForm)
-        {
-            var doc = File.Exists("config.xml")
-                ? XDocument.Load("config.xml")
-                : new XDocument(new XElement("Configuration"));
-
-            var formSettings = new XElement("FormSettings",
-                new XAttribute("Width", mainForm.Width),
-                new XAttribute("Height", mainForm.Height),
-                new XAttribute("Left", mainForm.Left),
-                new XAttribute("Top", mainForm.Top),
-                new XAttribute("WindowState", mainForm.WindowState.ToString())
-            );
-
-            doc.Root?.Element("FormSettings")?.Remove(); // Remove old settings
-            doc.Root?.Add(formSettings);
-            doc.Save("config.xml");
-        }
-
-        private static void LoadFormSettings(Form mainForm)
-        {
-            if (File.Exists("config.xml"))
-            {
-                var doc = XDocument.Load("config.xml");
-                var formSettings = doc.Root?.Element("FormSettings");
-
-                if (formSettings != null)
-                {
-                    mainForm.Width = int.Parse(formSettings.Attribute("Width")?.Value ?? "800");
-                    mainForm.Height = int.Parse(formSettings.Attribute("Height")?.Value ?? "600");
-                    mainForm.Left = int.Parse(formSettings.Attribute("Left")?.Value ?? "100");
-                    mainForm.Top = int.Parse(formSettings.Attribute("Top")?.Value ?? "100");
-
-                    if (Enum.TryParse(formSettings.Attribute("WindowState")?.Value, out FormWindowState state))
-                    {
-                        mainForm.WindowState = state;
-                    }
-                }
-            }
+            btbOutputPath.Enabled = !_appOptions.ReadFilesRecursively;
         }
 
         private bool CheckToolsInPath()
@@ -891,7 +899,7 @@ namespace RemuxOpt
         {
             var toolTip = new ToolTip
             {
-                IsBalloon = true, 
+                IsBalloon = true,
                 AutoPopDelay = 5000,
                 InitialDelay = 1000,
                 ReshowDelay = 500,
@@ -947,7 +955,7 @@ namespace RemuxOpt
         }
 
         private void InitializeListViewContextMenu(ListView listView)
-        { 
+        {
             var contextMenu = new ContextMenuStrip();
             contextMenu.Items.Add("Set default").Click += (s, e) => SetDefaultAudioLanguage(listView);
 
@@ -1225,7 +1233,7 @@ namespace RemuxOpt
                     new LanguageObject("Dutch", "dut"),
                     new LanguageObject("English", "eng")
                 ]);
-            }           
+            }
         }
 
         private void SaveListToXml()
@@ -1263,7 +1271,7 @@ namespace RemuxOpt
                 .Select(row => (MkvFileInfo)row.Tag)
                 .ToList();
         }
-        private WorkerResult RunRemuxProcess(BackgroundWorkerContext context)
+        private WorkerResult RunRemuxProcess(BackgroundWorkerContext context, BackgroundWorker worker, DoWorkEventArgs e)
         {
             var workerResult = new WorkerResult();
 
@@ -1279,15 +1287,23 @@ namespace RemuxOpt
             var remuxHelper = wp.RemuxHelper;
 
             var sb = new StringBuilder();
+            Process? currentProcess = null;
 
             for (int i = 0; i < selectedFiles.Count; i++)
             {
+                if (worker.CancellationPending)
+                {
+                    e.Cancel = true;
+                    try { currentProcess.Kill(); } catch { }
+                    return workerResult;
+                }
+
                 var currentFile = selectedFiles[i];
 
                 sb.AppendLine("Input file:");
                 sb.AppendLine(currentFile.FileName);
-                sb.AppendLine("Output file:");
-                sb.AppendLine(currentFile.OutputFileName);
+                //sb.AppendLine("Output file:");
+                //sb.AppendLine(currentFile.OutputFileName);
 
                 // Initial progress report for starting this file
                 var initialProgressMessage = new ProgressMessage(
@@ -1320,13 +1336,26 @@ namespace RemuxOpt
                         StandardErrorEncoding = Encoding.UTF8
                     };
 
-                    using var process = new Process { StartInfo = psi };
+                    currentProcess = new Process { StartInfo = psi };
 
-                    process.OutputDataReceived += (sender, e) => {
+                    currentProcess.OutputDataReceived += (sender, e) =>
+                    {
                         if (e.Data != null)
                         {
+                            // Append or process output line
                             stdoutBuilder.AppendLine(e.Data);
-                    
+
+                            // Check for cancellation
+                            if (worker.CancellationPending)
+                            {
+                                try
+                                {
+                                    stdoutBuilder.AppendLine("Process cancelled by user!");
+                                    currentProcess.Kill(entireProcessTree: true);
+                                }
+                                catch { }
+                            }
+
                             // Check for progress updates
                             if (e.Data.StartsWith("Progress: ") && e.Data.EndsWith("%"))
                             {
@@ -1335,50 +1364,61 @@ namespace RemuxOpt
                                 {
                                     // Calculate overall progress
                                     int overallProgress = CalculateOverallProgress(i, selectedFiles.Count, fileProgressValue);
-                            
+
                                     // Create progress message with current file progress
                                     var progressMessage = new ProgressMessage(
                                         $"Processing file {i + 1} of {selectedFiles.Count}: {Path.GetFileName(currentFile.FileName)} ({fileProgressValue}%)",
                                         sb.ToString()
                                     );
-                            
+
                                     _backgroundWorker.ReportProgress(overallProgress, progressMessage);
                                 }
                             }
                         }
                     };
 
-                    process.ErrorDataReceived += (sender, e) => {
+                    currentProcess.ErrorDataReceived += (sender, e) =>
+                    {
                         if (e.Data != null) stderrBuilder.AppendLine(e.Data);
                     };
 
-                    process.Start();
-                    process.BeginOutputReadLine();
-                    process.BeginErrorReadLine();
-                    process.WaitForExit();
+                    currentProcess.Start();
+                    currentProcess.BeginOutputReadLine();
+                    currentProcess.BeginErrorReadLine();
+                    currentProcess.WaitForExit();
 
                     string stdout = stdoutBuilder.ToString();
                     string stderr = stderrBuilder.ToString();
 
-                    if (process.ExitCode != 0)
+                    if (currentProcess.ExitCode != 0)
                     {
-                        sb.AppendLine($"[ERROR] mkvmerge exited with code {process.ExitCode}");
+                        sb.AppendLine($"[ERROR] mkvmerge exited with code {currentProcess.ExitCode}");
                         sb.AppendLine();
+
                         if (!string.IsNullOrWhiteSpace(stderr))
-                        { 
+                        {
                             sb.AppendLine(stderr);
                         }
-                
+
                         if (!string.IsNullOrWhiteSpace(stdout))
-                        { 
+                        {
                             sb.AppendLine(stdout);
                         }
                     }
                     else
                     {
                         sb.AppendLine("Remux completed successfully.");
+
                         if (!string.IsNullOrWhiteSpace(stdout))
+                        { 
                             sb.AppendLine(stdout);
+                        }
+
+                        if (_appOptions.DeleteOriginalsAfterSuccessfulRemux)
+                        {
+                            File.Delete(currentFile.FileName);
+                            sb.AppendLine($"The original file \"{currentFile.FileName}\" has been deleted!");
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -1405,16 +1445,16 @@ namespace RemuxOpt
         {
             // Each file represents (100 / totalFiles)% of the total work
             double progressPerFile = 100.0 / totalFiles;
-    
+
             // Progress from completed files
             double completedFilesProgress = currentFileIndex * progressPerFile;
-    
+
             // Progress from current file
             double currentFileContribution = (currentFileProgress / 100.0) * progressPerFile;
-    
+
             // Total progress
             int totalProgress = (int)Math.Round(completedFilesProgress + currentFileContribution);
-    
+
             return Math.Min(totalProgress, 100); // Ensure we don't exceed 100%
         }
     }

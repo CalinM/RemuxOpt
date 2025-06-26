@@ -3,14 +3,11 @@
     public class MkvFileInfo
     {
         public string FileName { get; set; } = string.Empty;
-        public string OutputFileName
+        public string FilePath
         {
             get
             {
-                return Path.Combine(
-                    Path.GetDirectoryName(FileName)!,
-                    Path.GetFileNameWithoutExtension(FileName) + ".remuxed.mkv"
-                );
+                return Path.GetDirectoryName(FileName);
             }
         }
         public List<AudioTrackInfo> AudioTracks { get; set; } = [];

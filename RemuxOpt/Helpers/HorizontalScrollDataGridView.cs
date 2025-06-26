@@ -28,33 +28,33 @@
             {
                 // Scroll horizontally
                 int scrollAmount = e.Delta > 0 ? -1 : 1;
-                int newOffset = this.HorizontalScrollingOffset + scrollAmount * 30; // Adjust multiplier if needed
+                int newOffset = HorizontalScrollingOffset + scrollAmount * 30; // Adjust multiplier if needed
                 newOffset = Math.Max(0, newOffset);
-                this.HorizontalScrollingOffset = newOffset;
+                HorizontalScrollingOffset = newOffset;
             }
         }
 
         public HorizontalScrollDataGridView()
         {
-            this.DoubleBuffered = true;
-            this.SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
+            DoubleBuffered = true;
+            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
 
-            this.CellValueChanged += HorizontalScrollDataGridView_CellValueChanged;
-            this.CurrentCellDirtyStateChanged += HorizontalScrollDataGridView_CurrentCellDirtyStateChanged;
-            this.ColumnWidthChanged += (s, e) => RepositionHeaderCheckBox();
-            this.Scroll += (s, e) => RepositionHeaderCheckBox();
+            CellValueChanged += HorizontalScrollDataGridView_CellValueChanged;
+            CurrentCellDirtyStateChanged += HorizontalScrollDataGridView_CurrentCellDirtyStateChanged;
+            ColumnWidthChanged += (s, e) => RepositionHeaderCheckBox();
+            Scroll += (s, e) => RepositionHeaderCheckBox();
         }
 
         public void AddHeaderCheckBoxToColumn(int columnIndex)
         {
-            if (columnIndex < 0 || columnIndex >= this.Columns.Count)
+            if (columnIndex < 0 || columnIndex >= Columns.Count)
                 throw new ArgumentOutOfRangeException(nameof(columnIndex));
 
             _checkboxColumnIndex = columnIndex;
 
             if (_headerCheckBox != null)
             {
-                this.Controls.Remove(_headerCheckBox);
+                Controls.Remove(_headerCheckBox);
                 _headerCheckBox.Dispose();
             }
 
@@ -69,16 +69,18 @@
 
             _headerCheckBox.CheckedChanged += HeaderCheckBox_CheckedChanged;
 
-            this.Controls.Add(_headerCheckBox);
+            Controls.Add(_headerCheckBox);
             RepositionHeaderCheckBox();
         }
 
         private void RepositionHeaderCheckBox()
         {
-            if (_headerCheckBox == null || _checkboxColumnIndex < 0 || _checkboxColumnIndex >= this.Columns.Count)
+            if (_headerCheckBox == null || _checkboxColumnIndex < 0 || _checkboxColumnIndex >= Columns.Count)
+            { 
                 return;
+            }
 
-            Rectangle headerRect = this.GetCellDisplayRectangle(_checkboxColumnIndex, -1, true);
+            Rectangle headerRect = GetCellDisplayRectangle(_checkboxColumnIndex, -1, true);
             _headerCheckBox.Location = new Point(
                 headerRect.X + (headerRect.Width - _headerCheckBox.Width) / 2,
                 headerRect.Y + (headerRect.Height - _headerCheckBox.Height) / 2
@@ -88,16 +90,20 @@
         private void HeaderCheckBox_CheckedChanged(object sender, EventArgs e)
         {
             if (_internalChange)
+            { 
                 return;
+            }
 
-            this.CurrentCell = null;
+            CurrentCell = null;
 
             _internalChange = true;
 
-            foreach (DataGridViewRow row in this.Rows)
+            foreach (DataGridViewRow row in Rows)
             {
                 if (!row.IsNewRow)
+                { 
                     row.Cells[_checkboxColumnIndex].Value = _headerCheckBox.Checked;
+                }
             }
 
             _internalChange = false;
@@ -105,16 +111,18 @@
 
         private void HorizontalScrollDataGridView_CurrentCellDirtyStateChanged(object sender, EventArgs e)
         {
-            if (this.CurrentCell is DataGridViewCheckBoxCell && this.IsCurrentCellDirty)
+            if (CurrentCell is DataGridViewCheckBoxCell && this.IsCurrentCellDirty)
             {
-                this.CommitEdit(DataGridViewDataErrorContexts.Commit);
+                CommitEdit(DataGridViewDataErrorContexts.Commit);
             }
         }
 
         private void HorizontalScrollDataGridView_CellValueChanged(object sender, DataGridViewCellEventArgs e)
         {
             if (_internalChange)
+            { 
                 return;
+            }
 
             if (e.ColumnIndex == _checkboxColumnIndex && e.RowIndex >= 0)
             {
@@ -127,10 +135,10 @@
             if (_headerCheckBox == null || _checkboxColumnIndex < 0)
                 return;
 
-            int checkedCount = 0;
-            int rowCount = 0;
+            var checkedCount = 0;
+            var rowCount = 0;
 
-            foreach (DataGridViewRow row in this.Rows)
+            foreach (DataGridViewRow row in Rows)
             {
                 if (!row.IsNewRow)
                 {
@@ -143,12 +151,37 @@
 
             _internalChange = true;
             if (checkedCount == 0)
+            { 
                 _headerCheckBox.CheckState = CheckState.Unchecked;
+            }
             else if (checkedCount == rowCount)
+            { 
                 _headerCheckBox.CheckState = CheckState.Checked;
+            }
             else
+            { 
                 _headerCheckBox.CheckState = CheckState.Indeterminate;
+            }
+
             _internalChange = false;
+        }
+
+        public void ClearWithHeaderCheckboxCleanup()
+        {
+            SuspendLayout();
+
+            // Remove the header checkbox if it exists
+            if (_headerCheckBox != null)
+            {
+                Controls.Remove(_headerCheckBox);
+                _headerCheckBox.Dispose();
+                _headerCheckBox = null;
+                _checkboxColumnIndex = -1;
+            }
+
+            Rows.Clear();
+            Columns.Clear();
+            ResumeLayout();
         }
     }
 }

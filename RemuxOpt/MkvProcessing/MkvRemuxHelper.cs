@@ -257,7 +257,16 @@ namespace RemuxOpt
             List<string> trackOrder = [];
 
             // Global options first
-            args.Add($"-o \"{Path.Combine(OutputFolder, Path.GetFileName(fileInfo.FileName))}\"");
+            var baseDir = Path.GetDirectoryName(fileInfo.FileName);
+            var fileName = Path.GetFileName(fileInfo.FileName);
+
+            var safeOutputFolder = OutputFolder.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+            var outputFile = OutputFolder == "\\Output"
+                ? Path.Combine(baseDir, safeOutputFolder, fileName)
+                : Path.Combine(OutputFolder, fileName);
+
+            args.Add($"-o \"{outputFile}\"");
     
             if (RemoveFileTitle)
             {
