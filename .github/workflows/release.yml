@@ -10,6 +10,9 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write
+      packages: write
 
     steps:
       - uses: actions/checkout@v4
@@ -84,7 +87,7 @@ jobs:
           
           echo "RELEASE_EXISTS=$($releaseExists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
         shell: powershell
 
       - name: Clean for fresh build
@@ -99,22 +102,36 @@ jobs:
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
         run: dotnet build "${{ steps.version.outputs.PROJECT_PATH }}" --configuration Release --no-restore
 
-      - name: Publish Windows x64
+      - name: Publish Windows x64 (Self-Contained)
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-        run: dotnet publish "${{ steps.version.outputs.PROJECT_PATH }}" --configuration Release --runtime win-x64 --self-contained true --output ./publish/win-x64
+        run: dotnet publish "${{ steps.version.outputs.PROJECT_PATH }}" --configuration Release --runtime win-x64 --self-contained true --output ./publish/win-x64-selfcontained
 
-      - name: Publish Windows x86
+      - name: Publish Windows x86 (Self-Contained)
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-        run: dotnet publish "${{ steps.version.outputs.PROJECT_PATH }}" --configuration Release --runtime win-x86 --self-contained true --output ./publish/win-x86
+        run: dotnet publish "${{ steps.version.outputs.PROJECT_PATH }}" --configuration Release --runtime win-x86 --self-contained true --output ./publish/win-x86-selfcontained
+
+      - name: Publish Windows x64 (Framework-Dependent)
+        if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
+        run: dotnet publish "${{ steps.version.outputs.PROJECT_PATH }}" --configuration Release --runtime win-x64 --self-contained false --output ./publish/win-x64-framework
+
+      - name: Publish Windows x86 (Framework-Dependent)
+        if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
+        run: dotnet publish "${{ steps.version.outputs.PROJECT_PATH }}" --configuration Release --runtime win-x86 --self-contained false --output ./publish/win-x86-framework
 
       - name: Create ZIP packages
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
         run: |
-          Compress-Archive -Path ./publish/win-x64/* -DestinationPath ./RemuxOpt-win-x64.zip -Force
-          Compress-Archive -Path ./publish/win-x86/* -DestinationPath ./RemuxOpt-win-x86.zip -Force
+          # Self-contained versions
+          Compress-Archive -Path ./publish/win-x64-selfcontained/* -DestinationPath ./RemuxOpt-win-x64-selfcontained.zip -Force
+          Compress-Archive -Path ./publish/win-x86-selfcontained/* -DestinationPath ./RemuxOpt-win-x86-selfcontained.zip -Force
+          
+          # Framework-dependent versions
+          Compress-Archive -Path ./publish/win-x64-framework/* -DestinationPath ./RemuxOpt-win-x64-framework.zip -Force
+          Compress-Archive -Path ./publish/win-x86-framework/* -DestinationPath ./RemuxOpt-win-x86-framework.zip -Force
+          
           Write-Host "Created ZIP packages:"
           Get-Item ./RemuxOpt-win-*.zip | ForEach-Object {
-            Write-Host "$($_.Name): $($_.Length) bytes"
+            Write-Host "$($_.Name): $([math]::Round($_.Length / 1MB, 2)) MB"
           }
         shell: powershell
 
@@ -125,14 +142,29 @@ jobs:
           tag_name: v${{ steps.version.outputs.VERSION }}
           name: RemuxOpt v${{ steps.version.outputs.VERSION }}
           files: |
-            ./RemuxOpt-win-x64.zip
-            ./RemuxOpt-win-x86.zip
+            ./RemuxOpt-win-x64-selfcontained.zip
+            ./RemuxOpt-win-x86-selfcontained.zip
+            ./RemuxOpt-win-x64-framework.zip
+            ./RemuxOpt-win-x86-framework.zip
           body: |
             ## RemuxOpt v${{ steps.version.outputs.VERSION }}
             Auto-generated release from GitHub Actions build.
-            ## Download
-            - **Windows 64-bit**: RemuxOpt-win-x64.zip
-            - **Windows 32-bit**: RemuxOpt-win-x86.zip
+            
+            ## Download Options
+            
+            ### 🚀 Self-Contained (Recommended for most users)
+            **No .NET installation required** - Everything included
+            - **Windows 64-bit**: RemuxOpt-win-x64-selfcontained.zip (~100-200MB)
+            - **Windows 32-bit**: RemuxOpt-win-x86-selfcontained.zip (~100-200MB)
+            
+            ### 📦 Framework-Dependent (Smaller download)
+            **Requires .NET 8.0 Runtime** - Download from: https://dotnet.microsoft.com/download/dotnet/8.0
+            - **Windows 64-bit**: RemuxOpt-win-x64-framework.zip (~10-50MB)
+            - **Windows 32-bit**: RemuxOpt-win-x86-framework.zip (~10-50MB)
+            
+            ### Which should I choose?
+            - **Self-Contained**: Just download, extract, and run - no additional setup needed
+            - **Framework-Dependent**: Smaller download, but you need to install .NET 8.0 Runtime first
           draft: false
           prerelease: false
         env:
