@@ -8,18 +8,18 @@
     <Nullable>enable</Nullable>
 
     <!-- Version that the workflow will read -->
-    <Version>1.0.0.15</Version>
+    <Version>1.0.0.16</Version>
 
     <!-- Optional: Additional version-related properties -->
-    <AssemblyVersion>1.0.0.15</AssemblyVersion>
-    <FileVersion>1.0.0.15</FileVersion>
+    <AssemblyVersion>1.0.0.16</AssemblyVersion>
+    <FileVersion>1.0.0.16</FileVersion>
 
     <!-- Optional: Application metadata -->
     <AssemblyTitle>RemuxOpt</AssemblyTitle>
-    <AssemblyDescription>Your application description</AssemblyDescription>
-    <AssemblyCompany>Your Company</AssemblyCompany>
+    <AssemblyDescription>Rutomatic remuxer</AssemblyDescription>
+    <AssemblyCompany>CalinM</AssemblyCompany>
     <AssemblyProduct>RemuxOpt</AssemblyProduct>
-    <Copyright>Copyright © Your Company 2025</Copyright>
+    <Copyright>Copyright © CalinM 2025</Copyright>
   </PropertyGroup>
 
   <ItemGroup>
