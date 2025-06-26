@@ -137,35 +137,50 @@ jobs:
 
       - name: Create Release
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ steps.version.outputs.VERSION }}
-          name: RemuxOpt v${{ steps.version.outputs.VERSION }}
-          files: |
-            ./RemuxOpt-win-x64-selfcontained.zip
-            ./RemuxOpt-win-x86-selfcontained.zip
-            ./RemuxOpt-win-x64-framework.zip
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $tag = "v$version"
+          $title = "RemuxOpt v$version"
+          
+          # Create release notes
+          $releaseNotes = @"
+          ## RemuxOpt v$version
+          Auto-generated release from GitHub Actions build.
+          
+          ## Download Options
+          
+          ### 🚀 Self-Contained (Recommended for most users)
+          **No .NET installation required** - Everything included
+          - **Windows 64-bit**: RemuxOpt-win-x64-selfcontained.zip (~100-200MB)
+          - **Windows 32-bit**: RemuxOpt-win-x86-selfcontained.zip (~100-200MB)
+          
+          ### 📦 Framework-Dependent (Smaller download)
+          **Requires .NET 8.0 Runtime** - Download from: https://dotnet.microsoft.com/download/dotnet/8.0
+          - **Windows 64-bit**: RemuxOpt-win-x64-framework.zip (~10-50MB)
+          - **Windows 32-bit**: RemuxOpt-win-x86-framework.zip (~10-50MB)
+          
+          ### Which should I choose?
+          - **Self-Contained**: Just download, extract, and run - no additional setup needed
+          - **Framework-Dependent**: Smaller download, but you need to install .NET 8.0 Runtime first
+          "@
+          
+          # Save release notes to file
+          $releaseNotes | Out-File -FilePath "release-notes.md" -Encoding UTF8
+          
+          Write-Host "Creating release $tag with title: $title"
+          Write-Host "Files to upload:"
+          Get-Item ./RemuxOpt-win-*.zip | ForEach-Object {
+            Write-Host "  $($_.Name)"
+          }
+          
+          # Create release using GitHub CLI
+          gh release create "$tag" `
+            --title "$title" `
+            --notes-file "release-notes.md" `
+            ./RemuxOpt-win-x64-selfcontained.zip `
+            ./RemuxOpt-win-x86-selfcontained.zip `
+            ./RemuxOpt-win-x64-framework.zip `
             ./RemuxOpt-win-x86-framework.zip
-          body: |
-            ## RemuxOpt v${{ steps.version.outputs.VERSION }}
-            Auto-generated release from GitHub Actions build.
-            
-            ## Download Options
-            
-            ### 🚀 Self-Contained (Recommended for most users)
-            **No .NET installation required** - Everything included
-            - **Windows 64-bit**: RemuxOpt-win-x64-selfcontained.zip (~100-200MB)
-            - **Windows 32-bit**: RemuxOpt-win-x86-selfcontained.zip (~100-200MB)
-            
-            ### 📦 Framework-Dependent (Smaller download)
-            **Requires .NET 8.0 Runtime** - Download from: https://dotnet.microsoft.com/download/dotnet/8.0
-            - **Windows 64-bit**: RemuxOpt-win-x64-framework.zip (~10-50MB)
-            - **Windows 32-bit**: RemuxOpt-win-x86-framework.zip (~10-50MB)
-            
-            ### Which should I choose?
-            - **Self-Contained**: Just download, extract, and run - no additional setup needed
-            - **Framework-Dependent**: Smaller download, but you need to install .NET 8.0 Runtime first
-          draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: powershell
