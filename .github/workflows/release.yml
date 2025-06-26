@@ -33,6 +33,10 @@ jobs:
           
           Write-Host "Found .csproj file: $($csprojFile.FullName)"
           
+          # Store the project path for later use
+          $relativePath = $csprojFile.FullName.Replace((Get-Location).Path + "\", "").Replace("\", "/")
+          echo "PROJECT_PATH=$relativePath" >> $env:GITHUB_OUTPUT
+          
           # Read and parse the XML
           [xml]$projectXml = Get-Content $csprojFile.FullName
           $versionNode = $projectXml.SelectSingleNode("//Version")
@@ -85,23 +89,23 @@ jobs:
 
       - name: Clean for fresh build
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-        run: dotnet clean --configuration Release
+        run: dotnet clean "${{ steps.version.outputs.PROJECT_PATH }}" --configuration Release
 
       - name: Restore dependencies
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-        run: dotnet restore
+        run: dotnet restore "${{ steps.version.outputs.PROJECT_PATH }}"
 
       - name: Build Release
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build "${{ steps.version.outputs.PROJECT_PATH }}" --configuration Release --no-restore
 
       - name: Publish Windows x64
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-        run: dotnet publish --configuration Release --runtime win-x64 --self-contained true --output ./publish/win-x64 --no-restore
+        run: dotnet publish "${{ steps.version.outputs.PROJECT_PATH }}" --configuration Release --runtime win-x64 --self-contained true --output ./publish/win-x64
 
       - name: Publish Windows x86
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
-        run: dotnet publish --configuration Release --runtime win-x86 --self-contained true --output ./publish/win-x86 --no-restore
+        run: dotnet publish "${{ steps.version.outputs.PROJECT_PATH }}" --configuration Release --runtime win-x86 --self-contained true --output ./publish/win-x86
 
       - name: Create ZIP packages
         if: steps.check_release.outputs.RELEASE_EXISTS == 'false'
