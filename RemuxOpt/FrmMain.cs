@@ -131,9 +131,7 @@ namespace RemuxOpt
                     OutputFolder = btbOutputPath.Text,
                     RemoveFileTitle = chkRemoveFileTitle.Checked,
                     DefaultTrackLanguageCode = GetDefaultLanguageCode(),
-                    AudioLanguageOrder = lvAudioTracks.Items.Cast<ListViewItem>()
-                        .Select(item => item.SubItems[1].Text)
-                        .ToList(),
+                    AudioLanguageOrder = GetAudioLanguageCodes(),
                     SubtitleLanguageOrder = lvSubtitleTracks.Items.Cast<ListViewItem>()
                         .Select(item => item.SubItems[1].Text)
                         .ToList()
@@ -166,6 +164,13 @@ namespace RemuxOpt
                     }
                 }
             };
+        }
+
+        private List<string> GetAudioLanguageCodes()
+        {
+            return lvAudioTracks.Items.Cast<ListViewItem>()
+                .Select(item => item.SubItems[1].Text)
+                .ToList();
         }
 
         private void ClearPreviousFilesDetails()
@@ -293,29 +298,49 @@ namespace RemuxOpt
 
             var columnName = dgv.Columns[e.ColumnIndex].Name;
 
+            if (columnName == "ExternalAudioType" || columnName == "ExternalAudioLanguage")
+            {
+                e.CellStyle.BackColor = Color.AntiqueWhite;
+            }
+
             // Check if the column is an Audio Lang column like "Audio0_Lang", "Audio1_Lang", ...
             if (columnName.StartsWith("Audio") && columnName.EndsWith("_Lang"))
             {
-                // Extract the index number from column name
-                // Example: "Audio0_Lang" -> 0
-                string indexStr = Regex.Replace(columnName, @"\D", ""); //  // \D = non-digit
+                var languagesCode = GetAudioLanguageCodes();
+
+                // Extract the audio index from column name
+                string indexStr = Regex.Replace(columnName, @"\D", ""); // Remove non-digits
                 if (int.TryParse(indexStr, out int audioIndex))
                 {
-                    // Get the forced flag value from hidden column
-                    var forcedCell = dgv.Rows[e.RowIndex].Cells[$"IsForced{audioIndex}"];
-                    bool isForced = false;
+                    var langCell = dgv.Rows[e.RowIndex].Cells[e.ColumnIndex];
+                    var langValue = Convert.ToString(langCell.Value)?.Trim();
 
-                    if (forcedCell.Value != null)
+                    var isInvalidLang = !string.IsNullOrEmpty(langValue) && !languagesCode.Contains(langValue);
+
+                    // Get the forced flag from hidden column
+                    var forcedCell = dgv.Rows[e.RowIndex].Cells[$"IsForced{audioIndex}"];
+                    var isForced = false;
+
+                    if (forcedCell?.Value != null)
                     {
                         if (forcedCell.Value is bool b)
+                        { 
                             isForced = b;
+                        }
                         else
+                        { 
                             bool.TryParse(forcedCell.Value.ToString(), out isForced);
+                        }
                     }
 
-                    if (isForced)
+                    if (isInvalidLang)
                     {
-                        e.CellStyle.BackColor = Color.LightCoral; // or Color.Red
+                        e.CellStyle.BackColor = Color.Red;
+                        e.CellStyle.ForeColor = Color.White;
+                    }
+                    else if (isForced)
+                    {
+                        e.CellStyle.BackColor = Color.LightCoral;
                         e.CellStyle.ForeColor = Color.Black;
                     }
                     else
@@ -554,6 +579,10 @@ namespace RemuxOpt
                                 MessageBoxButtons.OK, MessageBoxIcon.Information,
                                 MessageBoxDefaultButton.Button1, timeoutSeconds: 5);
 
+                            tcGrid.SelectTab(tpOutput);
+                            tbOutput.SelectionStart = tbOutput.Text.Length;
+                            tbOutput.SelectionLength = 0;
+                            tbOutput.ScrollToCaret();
                             break;
                     }
                 }
@@ -562,8 +591,6 @@ namespace RemuxOpt
             progressBar.Value = 0;
             pProgress.Visible = false;
         }
-
-
 
         private void PopulateGrid(List<MkvFileInfo> files)
         {
@@ -596,7 +623,9 @@ namespace RemuxOpt
                     Frozen = true
                 });
 
-            if (_appOptions.ReadFilesRecursively)
+            var pathColumnVisible = files.Select(x => x.FilePath).Distinct().Count() > 1;
+
+            if (_appOptions.ReadFilesRecursively && pathColumnVisible)
             {
                 _dataGridViewResults.Columns.Add(
                     new DataGridViewTextBoxColumn
@@ -627,6 +656,7 @@ namespace RemuxOpt
                     Name = $"IsForced{i}",
                     Visible = false // hide the column
                 };
+
                 _dataGridViewResults.Columns.Add(forcedCol);
             }
 
@@ -669,7 +699,7 @@ namespace RemuxOpt
                     Path.GetFileName(file.FileName)
                 };
 
-                if (_appOptions.ReadFilesRecursively)
+                if (_appOptions.ReadFilesRecursively && pathColumnVisible)
                 {
                     row.Add(Path.GetDirectoryName(file.FileName));
                 }
@@ -724,25 +754,39 @@ namespace RemuxOpt
 
             _dataGridViewResults.HeaderCheckState = true;
 
-            for (int i = 0; i < _dataGridViewResults.Rows.Count; i++)
-            {
-                //Filename/fixed column
-                _dataGridViewResults.Rows[i].Cells[1].Style.BackColor = Color.WhiteSmoke;
-
-                if (hasExternalAudio)
-                {
-                    int? extTypeColIndex = _dataGridViewResults.Columns["ExternalAudioType"]?.Index;
-                    int? extLangColIndex = _dataGridViewResults.Columns["ExternalAudioLanguage"]?.Index;
-
-                    if (extTypeColIndex.HasValue)
-                        _dataGridViewResults.Rows[i].Cells[extTypeColIndex.Value].Style.BackColor = Color.AntiqueWhite;
-
-                    if (extLangColIndex.HasValue)
-                        _dataGridViewResults.Rows[i].Cells[extLangColIndex.Value].Style.BackColor = Color.AntiqueWhite;
-                }
+            var invalid = CountInvalidLanguageCodes();
+            if (invalid > 0)
+            { 
+                MsgBox.Show(this, $"{invalid} files have audio tracks with unrecognized language codes.", "Validation Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
 
             _dataGridViewResults.ResumeLayout();
+        }
+
+        private int CountInvalidLanguageCodes()
+        {
+            int badFileCount = 0;
+            var badRows = new HashSet<int>();
+            var languagesCode = GetAudioLanguageCodes();
+
+            foreach (DataGridViewRow row in _dataGridViewResults.Rows)
+            {
+                foreach (DataGridViewColumn col in _dataGridViewResults.Columns)
+                {
+                    if (col.Name.StartsWith("Audio") && col.Name.EndsWith("_Lang"))
+                    {
+                        var langValue = Convert.ToString(row.Cells[col.Index].Value)?.Trim();
+                        if (!string.IsNullOrEmpty(langValue) && !languagesCode.Contains(langValue))
+                        {
+                            badRows.Add(row.Index);
+                            break; // Only count each file once
+                        }
+                    }
+                }
+            }
+
+            badFileCount = badRows.Count;
+            return badFileCount;
         }
 
         private void BuildTextView(List<MkvFileInfo> files)

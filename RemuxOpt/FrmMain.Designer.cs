@@ -29,6 +29,7 @@
         private void InitializeComponent()
         {
             pParameters = new Panel();
+            bOptions = new Button();
             btbOutputPath = new ButtonTextBox();
             lbOutputFolder = new Label();
             lbMediaInfoCliVersion = new Label();
@@ -61,7 +62,6 @@
             txtFilesDetails = new TextBox();
             tpOutput = new TabPage();
             tbOutput = new TextBox();
-            bOptions = new Button();
             pParameters.SuspendLayout();
             pFiles.SuspendLayout();
             pProgress.SuspendLayout();
@@ -99,6 +99,16 @@
             pParameters.Name = "pParameters";
             pParameters.Size = new Size(440, 777);
             pParameters.TabIndex = 0;
+            // 
+            // bOptions
+            // 
+            bOptions.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            bOptions.Location = new Point(16, 691);
+            bOptions.Name = "bOptions";
+            bOptions.Size = new Size(95, 23);
+            bOptions.TabIndex = 52;
+            bOptions.Text = "Options";
+            bOptions.UseVisualStyleBackColor = true;
             // 
             // btbOutputPath
             // 
@@ -140,7 +150,8 @@
             // 
             // bRemux
             // 
-            bRemux.Location = new Point(332, 679);
+            bRemux.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            bRemux.Location = new Point(331, 691);
             bRemux.Name = "bRemux";
             bRemux.Size = new Size(95, 23);
             bRemux.TabIndex = 46;
@@ -384,7 +395,7 @@
             tpTextView.Location = new Point(4, 24);
             tpTextView.Name = "tpTextView";
             tpTextView.Padding = new Padding(3);
-            tpTextView.Size = new Size(836, 733);
+            tpTextView.Size = new Size(836, 749);
             tpTextView.TabIndex = 1;
             tpTextView.Text = "Text-view";
             tpTextView.UseVisualStyleBackColor = true;
@@ -398,7 +409,7 @@
             txtFilesDetails.Name = "txtFilesDetails";
             txtFilesDetails.ReadOnly = true;
             txtFilesDetails.ScrollBars = ScrollBars.Vertical;
-            txtFilesDetails.Size = new Size(830, 727);
+            txtFilesDetails.Size = new Size(830, 743);
             txtFilesDetails.TabIndex = 1;
             // 
             // tpOutput
@@ -407,7 +418,7 @@
             tpOutput.Location = new Point(4, 24);
             tpOutput.Name = "tpOutput";
             tpOutput.Padding = new Padding(3);
-            tpOutput.Size = new Size(836, 733);
+            tpOutput.Size = new Size(836, 749);
             tpOutput.TabIndex = 2;
             tpOutput.Text = "Output";
             tpOutput.UseVisualStyleBackColor = true;
@@ -422,17 +433,8 @@
             tbOutput.Name = "tbOutput";
             tbOutput.ReadOnly = true;
             tbOutput.ScrollBars = ScrollBars.Vertical;
-            tbOutput.Size = new Size(830, 727);
+            tbOutput.Size = new Size(830, 743);
             tbOutput.TabIndex = 2;
-            // 
-            // bOptions
-            // 
-            bOptions.Location = new Point(16, 679);
-            bOptions.Name = "bOptions";
-            bOptions.Size = new Size(95, 23);
-            bOptions.TabIndex = 52;
-            bOptions.Text = "Options";
-            bOptions.UseVisualStyleBackColor = true;
             // 
             // FrmMain
             // 

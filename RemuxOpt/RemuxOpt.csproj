@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -8,11 +8,11 @@
     <Nullable>enable</Nullable>
 
     <!-- Version that the workflow will read -->
-    <Version>1.0.0.16</Version>
+    <Version>1.0.0.26</Version>
 
     <!-- Optional: Additional version-related properties -->
-    <AssemblyVersion>1.0.0.16</AssemblyVersion>
-    <FileVersion>1.0.0.16</FileVersion>
+    <AssemblyVersion>1.0.0.26</AssemblyVersion>
+    <FileVersion>1.0.0.26</FileVersion>
 
     <!-- Optional: Application metadata -->
     <AssemblyTitle>RemuxOpt</AssemblyTitle>
@@ -22,8 +22,17 @@
     <Copyright>Copyright © CalinM 2025</Copyright>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <ShouldCreateLogs>True</ShouldCreateLogs>
+    <AdvancedSettingsExpanded>True</AdvancedSettingsExpanded>
+    <!-- Removed all the Update*Version and versioning-related properties -->
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="WindowsAPICodePack-Shell" Version="1.1.1" />
   </ItemGroup>
 
+  <Target Name="IncrementVersion" BeforeTargets="BeforeBuild">
+    <Exec Command="powershell -ExecutionPolicy Bypass -File &quot;$(ProjectDir)increment-version.ps1&quot; -CsprojPath &quot;$(MSBuildProjectFile)&quot;"
+          ContinueOnError="false" />
+  </Target>  
 </Project>

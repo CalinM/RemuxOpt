@@ -22,7 +22,7 @@ namespace RemuxOpt
             foreach (var track in mkvObj["tracks"].AsArray().Where(t => t["type"].ToString() == "audio"))
             {
                 var props = track["properties"];
-                var lang = props?["language_ietf"]?.ToString() ?? props?["language"]?.ToString();
+                var lang = props?["language"]?.ToString() ?? props?["language"]?.ToString();
                 var title = props?["track_name"]?.ToString();
                 var channels = props?["audio_channels"]?.GetValue<int>() ?? 0;
                 var isForced = props?["forced_track"] != null && bool.TryParse(props["forced_track"]?.ToString(), out var f) ? f : false;
@@ -67,7 +67,7 @@ namespace RemuxOpt
             foreach (var track in mkvObj["tracks"].AsArray().Where(t => t["type"].ToString() == "subtitles"))
             {
                 var props = track["properties"];
-                var lang = props?["language_ietf"]?.ToString() ?? props?["language"]?.ToString();
+                var lang = props?["language"]?.ToString() ?? props?["language"]?.ToString();
                 var title = props?["track_name"]?.ToString();
                 var isForced = props?["forced_track"] != null && bool.TryParse(props["forced_track"]?.ToString(), out var f) ? f : false;
 
