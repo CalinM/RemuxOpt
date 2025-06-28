@@ -1,8 +1,9 @@
-﻿# Release Notes - Version 1.0.0.37
+﻿# Release Notes - Version 1.0.0.60
 
-**Release Date:** 2025-06-27
+**Release Date:** 2025-06-28
 
 ## 🚀 New Features
+- Added a new category of options to apply certain file names conventions (ongoing). [285d690]
 - Added Options form with two new settings:  - Read files from all subfolders recursively  - Delete the original file if no errors are encountered [ced0de6]
 
 ## 🐛 Bug Fixes
@@ -13,5 +14,5 @@
 - Update release.yml [b0d79d6]
 
 ---
-**Full Changelog:** v1.0.0.15...1.0.0.37
-**Commits in this release:** 4
+**Full Changelog:** v1.0.0.15...1.0.0.60
+**Commits in this release:** 5

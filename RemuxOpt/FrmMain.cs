@@ -3,9 +3,11 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Windows.Forms;
 using System.Xml.Linq;
 using static System.Windows.Forms.ListViewItem;
 using ListView = System.Windows.Forms.ListView;
@@ -45,7 +47,8 @@ namespace RemuxOpt
             {
                 lbDragFolderHere.Visible = false;
                 ClearPreviousFilesDetails();
-
+                tcGrid.SelectTab(tpGrid);
+                
                 var paths = (string[])e.Data.GetData(DataFormats.FileDrop);
 
                 var droppedFiles = paths.SelectMany(path =>
@@ -131,10 +134,8 @@ namespace RemuxOpt
                     OutputFolder = btbOutputPath.Text,
                     RemoveFileTitle = chkRemoveFileTitle.Checked,
                     DefaultTrackLanguageCode = GetDefaultLanguageCode(),
-                    AudioLanguageOrder = GetAudioLanguageCodes(),
-                    SubtitleLanguageOrder = lvSubtitleTracks.Items.Cast<ListViewItem>()
-                        .Select(item => item.SubItems[1].Text)
-                        .ToList()
+                    AudioLanguageOrder = GetAudioLanguageCodes(lvAudioTracks),
+                    SubtitleLanguageOrder = GetAudioLanguageCodes(lvSubtitleTracks)
                 };
 
                 tbOutput.Clear();
@@ -166,9 +167,9 @@ namespace RemuxOpt
             };
         }
 
-        private List<string> GetAudioLanguageCodes()
+        private List<string> GetAudioLanguageCodes(ListView listview)
         {
-            return lvAudioTracks.Items.Cast<ListViewItem>()
+            return listview.Items.Cast<ListViewItem>()
                 .Select(item => item.SubItems[1].Text)
                 .ToList();
         }
@@ -210,7 +211,9 @@ namespace RemuxOpt
 
                 // If it's a file path, extract the directory
                 if (Path.HasExtension(path))
+                { 
                     directoryPath = Path.GetDirectoryName(path)!;
+                }
 
                 if (string.IsNullOrEmpty(directoryPath))
                 {
@@ -220,7 +223,9 @@ namespace RemuxOpt
 
                 // Create the directory if it doesn't exist
                 if (!Directory.Exists(directoryPath))
+                { 
                     Directory.CreateDirectory(directoryPath);
+                }
             }
             catch (UnauthorizedAccessException)
             {
@@ -243,7 +248,6 @@ namespace RemuxOpt
                 dialog.IsFolderPicker = true;
                 dialog.Title = "Please pick the output folder ...";
                 dialog.InitialDirectory = btbOutputPath.Text;
-                //dialog.DialogOpening += Dialog_DialogOpening;
 
                 if (dialog.ShowDialog() == CommonFileDialogResult.Ok)
                 {
@@ -286,17 +290,46 @@ namespace RemuxOpt
             };
 
             tpGrid.Controls.Add(_dataGridViewResults);
+            InitializeGridContextMenu();
 
             _dataGridViewResults.CellFormatting += _dataGridViewResults_CellFormatting;
+        }
+
+        private void InitializeGridContextMenu()
+        {
+            var contextMenu = new ContextMenuStrip();
+            contextMenu.Items.Add("Assign/update a language code ...").Click += (s, e) => UpdateLanguageCode();
+
+            _dataGridViewResults.ContextMenuStrip = contextMenu;
+        }
+
+        private void UpdateLanguageCode()
+        {
+
         }
 
         private void _dataGridViewResults_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
         {
             var dgv = sender as DataGridView;
             if (dgv == null || e.RowIndex < 0)
+            { 
                 return;
+            }
 
             var columnName = dgv.Columns[e.ColumnIndex].Name;
+
+            if (columnName != "FileName" && !dgv.Rows[e.RowIndex].Selected && e.ColumnIndex > 0)
+            {
+                if (_rowColorMap.TryGetValue(e.RowIndex, out Color rowColor))
+                {
+                    e.CellStyle.BackColor = rowColor;
+                }
+            }
+
+            if (columnName == "Filename")
+            {
+                e.CellStyle.BackColor = Color.WhiteSmoke;
+            }
 
             if (columnName == "ExternalAudioType" || columnName == "ExternalAudioLanguage")
             {
@@ -306,7 +339,7 @@ namespace RemuxOpt
             // Check if the column is an Audio Lang column like "Audio0_Lang", "Audio1_Lang", ...
             if (columnName.StartsWith("Audio") && columnName.EndsWith("_Lang"))
             {
-                var languagesCode = GetAudioLanguageCodes();
+                var languagesCode = GetAudioLanguageCodes(lvAudioTracks);
 
                 // Extract the audio index from column name
                 string indexStr = Regex.Replace(columnName, @"\D", ""); // Remove non-digits
@@ -315,7 +348,7 @@ namespace RemuxOpt
                     var langCell = dgv.Rows[e.RowIndex].Cells[e.ColumnIndex];
                     var langValue = Convert.ToString(langCell.Value)?.Trim();
 
-                    var isInvalidLang = !string.IsNullOrEmpty(langValue) && !languagesCode.Contains(langValue);
+                    var languageNotConfigured = !string.IsNullOrEmpty(langValue) && !languagesCode.Contains(langValue);
 
                     // Get the forced flag from hidden column
                     var forcedCell = dgv.Rows[e.RowIndex].Cells[$"IsForced{audioIndex}"];
@@ -333,7 +366,7 @@ namespace RemuxOpt
                         }
                     }
 
-                    if (isInvalidLang)
+                    if (languageNotConfigured)
                     {
                         e.CellStyle.BackColor = Color.Red;
                         e.CellStyle.ForeColor = Color.White;
@@ -343,22 +376,24 @@ namespace RemuxOpt
                         e.CellStyle.BackColor = Color.LightCoral;
                         e.CellStyle.ForeColor = Color.Black;
                     }
-                    else
-                    {
-                        e.CellStyle.BackColor = Color.White;
-                        e.CellStyle.ForeColor = Color.Black;
-                    }
                 }
             }
 
             // Check if the column is an Subtile Lang column like "Sub0_Lang", "Sub1_Lang", ...
             if (columnName.StartsWith("Sub") && columnName.EndsWith("_Lang"))
             {
+                var languagesCode = GetAudioLanguageCodes(lvSubtitleTracks);
+
                 // Extract the index number from column name
                 // Example: "Sub0_Lang" -> 0
                 string indexStr = Regex.Replace(columnName, @"\D", ""); //  // \D = non-digit
                 if (int.TryParse(indexStr, out int audioIndex))
                 {
+                    var langCell = dgv.Rows[e.RowIndex].Cells[e.ColumnIndex];
+                    var langValue = Convert.ToString(langCell.Value)?.Trim();
+
+                    var languageNotConfigured = !string.IsNullOrEmpty(langValue) && !languagesCode.Contains(langValue);
+
                     // Get the forced flag value from hidden column
                     var forcedCell = dgv.Rows[e.RowIndex].Cells[$"SubIsForced{audioIndex}"];
                     bool isForced = false;
@@ -371,20 +406,18 @@ namespace RemuxOpt
                             bool.TryParse(forcedCell.Value.ToString(), out isForced);
                     }
 
-                    if (isForced)
+                    if (languageNotConfigured)
+                    {
+                        e.CellStyle.BackColor = Color.Red;
+                        e.CellStyle.ForeColor = Color.White;
+                    }
+                    else if (isForced)
                     {
                         e.CellStyle.BackColor = Color.LightCoral; // or Color.Red
                         e.CellStyle.ForeColor = Color.Black;
                     }
-                    else
-                    {
-                        e.CellStyle.BackColor = Color.White;
-                        e.CellStyle.ForeColor = Color.Black;
-                    }
                 }
             }
-
-            // You can do the same logic for subtitle columns if needed
         }
 
         private void InitBackgroundWorker()
@@ -552,11 +585,16 @@ namespace RemuxOpt
                                 PopulateGrid(workerResult.Files.OrderBy(o => o.FilePath).ThenBy(o => o.FileName).ToList());
                                 BuildTextView(workerResult.Files);
 
-                                btbOutputPath.Text =
-                                    workerResult.Files.Select(x => x.FilePath).Distinct().Count() == 1
-                                        ? Path.Combine(workerResult.Files.FirstOrDefault().FilePath, "Output")
-                                        : "\\Output";
-
+                                if (workerResult.Files.Select(x => x.FilePath).Distinct().Count() == 1)
+                                {
+                                    btbOutputPath.Text = Path.Combine(workerResult.Files.FirstOrDefault().FilePath, "Output");
+                                    btbOutputPath.Enabled = true;
+                                }
+                                else
+                                {
+                                    btbOutputPath.Text = "\\Output";
+                                    btbOutputPath.Enabled = false;
+                                }
                             }
 
                             break;
@@ -594,6 +632,8 @@ namespace RemuxOpt
 
         private void PopulateGrid(List<MkvFileInfo> files)
         {
+            _rowColorMap.Clear();
+
             _dataGridViewResults.Columns.Clear();
             _dataGridViewResults.Rows.Clear();
 
@@ -623,9 +663,8 @@ namespace RemuxOpt
                     Frozen = true
                 });
 
-            var pathColumnVisible = files.Select(x => x.FilePath).Distinct().Count() > 1;
-
-            if (_appOptions.ReadFilesRecursively && pathColumnVisible)
+            var showFilePathColumn = files.Select(x => x.FilePath).Distinct().Count() > 1;
+            if (showFilePathColumn)
             {
                 _dataGridViewResults.Columns.Add(
                     new DataGridViewTextBoxColumn
@@ -699,9 +738,9 @@ namespace RemuxOpt
                     Path.GetFileName(file.FileName)
                 };
 
-                if (_appOptions.ReadFilesRecursively && pathColumnVisible)
+                if (showFilePathColumn)
                 {
-                    row.Add(Path.GetDirectoryName(file.FileName));
+                    row.Add(file.FilePath);
                 }
 
                 if (hasExternalAudio)
@@ -722,7 +761,13 @@ namespace RemuxOpt
                 }
 
                 for (int i = file.AudioTracks.Count; i < maxAudio; i++)
-                    row.AddRange(["", "", "", ""]);
+                {
+                    row.Add("");        //language
+                    row.Add("");        //title
+                    row.Add("");        //channels
+                    row.Add("");        //bitRate
+                    row.Add("false");   //forced                    
+                }
 
                 foreach (var s in file.Subtitles)
                 {
@@ -731,8 +776,13 @@ namespace RemuxOpt
                     row.Add(s.IsForced);
                 }
 
-                for (int i = file.Subtitles.Count; i < maxSubs; i++)
-                    row.AddRange(["", ""]);
+                for (var i = file.Subtitles.Count; i < maxSubs; i++)
+                { 
+                    row.Add("");        //language
+                    row.Add("");        //title
+                    row.Add("false");   //forced
+                }
+
 
                 row.Add(file.Attachments.Count);
 
@@ -761,13 +811,41 @@ namespace RemuxOpt
             }
 
             _dataGridViewResults.ResumeLayout();
+
+            if (showFilePathColumn)
+            { 
+                RebuildRowColorMap();
+            }
+        }
+
+        private Dictionary<int, Color> _rowColorMap = [];
+
+        private void RebuildRowColorMap()
+        {
+            string lastPath = null;
+            bool toggle = false; // false: yellow, true: light green
+
+            for (int i = 0; i < _dataGridViewResults.Rows.Count; i++)
+            {
+                var row = _dataGridViewResults.Rows[i];
+                var currentPath = Convert.ToString(row.Cells["FilePath"].Value)?.Trim();
+
+                if (!string.Equals(currentPath, lastPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    toggle = !toggle;
+                    lastPath = currentPath;
+                }
+
+                //_rowColorMap[i] = toggle ? Color.LightGreen : Color.LightYellow;
+                _rowColorMap[i] = toggle ? Color.FromArgb(244, 243, 238) : Color.FromArgb(217, 226, 225);
+            }
         }
 
         private int CountInvalidLanguageCodes()
         {
             int badFileCount = 0;
             var badRows = new HashSet<int>();
-            var languagesCode = GetAudioLanguageCodes();
+            var languagesCode = GetAudioLanguageCodes(lvAudioTracks);
 
             foreach (DataGridViewRow row in _dataGridViewResults.Rows)
             {
@@ -1466,8 +1544,8 @@ namespace RemuxOpt
 
                         if (_appOptions.ApplyNamingConventions)
                         {
-                            ApplyNamingConventions(mkvMA.outputFilePath);
-                            sb.AppendLine($"The naming conventions were applied to \"{mkvMA.outputFilePath}\"!");
+                            ApplyNamingConventions(mkvMA.outputFilePath, sb);                            
+                            MoveSourcesTxtFileToOutputFolder(currentFile.FilePath, mkvMA.outputFilePath, sb);
                         }
                     }
                 }
@@ -1492,25 +1570,47 @@ namespace RemuxOpt
             return workerResult;
         }
 
-        private void ApplyNamingConventions(string filePath)
+        private void ApplyNamingConventions(string outputFilePath, StringBuilder sb)
         {
             try
             {
                 // Get directory, filename, and extension
-                string directory = Path.GetDirectoryName(filePath);
-                string fileName = Path.GetFileName(filePath);
-                string newFileName = fileName.Replace(" !", "!");
+                var directory = Path.GetDirectoryName(outputFilePath);
+                var fileName = Path.GetFileName(outputFilePath);
+                var newFileName = fileName.Replace(" !", "!");
 
                 // Only rename if there's an actual change
                 if (fileName != newFileName)
                 {
                     string newFilePath = Path.Combine(directory, newFileName);
-                    File.Move(filePath, newFilePath);
+                    File.Move(outputFilePath, newFilePath);
+                }
+
+                sb.AppendLine($"The naming conventions were applied to \"{outputFilePath}\"!");
+            }
+            catch (Exception ex)
+            {
+                sb.AppendLine($"Error: Failed to apply naming conventions to: \"{outputFilePath}\"\n\n{ex.Message}");
+            }
+        }
+
+        private void MoveSourcesTxtFileToOutputFolder(string inputFilePath, string outputFilePath, StringBuilder sb)
+        {    
+            try
+            {
+                //move the "Video source.txt" file to "Output\source.txt"
+                var videSourceFullFilePath = Path.Combine(inputFilePath, "Video sources.txt");
+                if (File.Exists(videSourceFullFilePath))
+                {
+                    var sourceFullFilePath = Path.Combine(Path.GetDirectoryName(outputFilePath), "sources.txt");
+                    File.Move(videSourceFullFilePath, sourceFullFilePath);
+
+                    sb.AppendLine("Moved the \"Video source.txt\" file to output folder!");
                 }
             }
             catch (Exception ex)
             {
-                MsgBox.Show(this, $"Failed to apply naming conventions: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                sb.AppendLine($"Error: Failed to move \"Video source.txt\" file to output folder!\n\n{ex.Message}");
             }
         }
 

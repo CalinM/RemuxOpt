@@ -452,25 +452,5 @@ namespace RemuxOpt
             8 => "7.1",
             _ => $"{ch}.0"
         };
-
-        public async Task<(bool Success, string Output)> RunRemuxAsync(string args)
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = MkvMergePath,
-                Arguments = args,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            var process = new Process { StartInfo = psi };
-            var outputBuilder = new StringBuilder();
-            process.Start();
-            outputBuilder.AppendLine(await process.StandardOutput.ReadToEndAsync());
-            outputBuilder.AppendLine(await process.StandardError.ReadToEndAsync());
-            await process.WaitForExitAsync();
-            return (process.ExitCode == 0, outputBuilder.ToString());
-        }
     }
 }

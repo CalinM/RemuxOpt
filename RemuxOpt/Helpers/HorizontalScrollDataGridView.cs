@@ -16,22 +16,75 @@
             }
         }
 
+        /*
+        Horizontal Scrollbar Visible        Ctrl Key Pressed        Action
+        ✅ Yes                              ❌ No                   👉 Horizontal scroll (default)
+        ✅ Yes                              ✅ Yes                   ⬆️ Vertical scroll (override)
+        ❌ No                               Doesn't matter           ⬆️ Vertical scroll (fallback)
+         */
         protected override void OnMouseWheel(MouseEventArgs e)
         {
-            // Check if the Shift key is pressed: horizontal scrolling
-            if ((ModifierKeys & Keys.Shift) == Keys.Shift)
+            bool ctrlPressed = (ModifierKeys & Keys.Control) == Keys.Control;
+
+            // Check if horizontal scroll is possible
+            bool horizontalScrollVisible = Columns.GetColumnsWidth(DataGridViewElementStates.Visible) > ClientSize.Width;
+
+            if (!horizontalScrollVisible || ctrlPressed)
             {
-                // Default vertical scrolling
-                base.OnMouseWheel(e);
+                // Force vertical scroll manually
+                try
+                {
+                    int linesToScroll = SystemInformation.MouseWheelScrollLines;
+                    int direction = e.Delta > 0 ? -1 : 1; // Mouse up: scroll up (row index decreases)
+
+                    int newIndex = FirstDisplayedScrollingRowIndex + direction * linesToScroll;
+                    newIndex = Math.Max(0, Math.Min(RowCount - 1, newIndex));
+
+                    FirstDisplayedScrollingRowIndex = newIndex;
+                }
+                catch
+                {
+                    // Ignore if no rows or index out of range
+                }
             }
             else
             {
-                // Scroll horizontally
+                // Horizontal scroll
                 int scrollAmount = e.Delta > 0 ? -1 : 1;
-                int newOffset = HorizontalScrollingOffset + scrollAmount * 30; // Adjust multiplier if needed
-                newOffset = Math.Max(0, newOffset);
-                HorizontalScrollingOffset = newOffset;
+                int newOffset = HorizontalScrollingOffset + scrollAmount * 30;
+                HorizontalScrollingOffset = Math.Max(0, newOffset);
             }
+        }
+
+        /*
+        There is a known quirk in DataGridView: when you press Home, it selects the first column but doesn’t scroll horizontally — unlike End,
+        which does scroll right. This is default behavior and happens even in a plain DataGridView.
+        */
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == Keys.Home)
+            {
+                // Scroll all the way to the left
+                HorizontalScrollingOffset = 0;
+
+                // Optional: Move selection to first visible cell in the current row
+                if (CurrentCell != null)
+                {
+                    int rowIndex = CurrentCell.RowIndex;
+                    foreach (DataGridViewColumn col in Columns)
+                    {
+                        if (col.Visible)
+                        {
+                            CurrentCell = this[col.Index, rowIndex];
+                            break;
+                        }
+                    }
+                }
+
+                return true; // Mark as handled
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
         }
 
         public HorizontalScrollDataGridView()
@@ -111,7 +164,7 @@
 
         private void HorizontalScrollDataGridView_CurrentCellDirtyStateChanged(object sender, EventArgs e)
         {
-            if (CurrentCell is DataGridViewCheckBoxCell && this.IsCurrentCellDirty)
+            if (CurrentCell is DataGridViewCheckBoxCell && IsCurrentCellDirty)
             {
                 CommitEdit(DataGridViewDataErrorContexts.Commit);
             }

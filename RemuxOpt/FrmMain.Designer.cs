@@ -28,6 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(FrmMain));
             pParameters = new Panel();
             bOptions = new Button();
             btbOutputPath = new ButtonTextBox();
@@ -443,6 +444,7 @@
             ClientSize = new Size(1284, 777);
             Controls.Add(pFiles);
             Controls.Add(pParameters);
+            Icon = (Icon)resources.GetObject("$this.Icon");
             MinimumSize = new Size(1300, 800);
             Name = "FrmMain";
             Text = "RemuxOpt";
