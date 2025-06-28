@@ -1360,9 +1360,9 @@ namespace RemuxOpt
 
                 try
                 {
-                    string args = remuxHelper.BuildMkvMergeArgs(currentFile);
+                    var mkvMA = remuxHelper.BuildMkvMergeArgs(currentFile);
                     sb.AppendLine("Arguments:");
-                    sb.AppendLine(args);
+                    sb.AppendLine(mkvMA.arguments);
                     sb.AppendLine();
 
                     var stdoutBuilder = new StringBuilder();
@@ -1371,7 +1371,7 @@ namespace RemuxOpt
                     var psi = new ProcessStartInfo
                     {
                         FileName = remuxHelper.MkvMergePath,
-                        Arguments = args,
+                        Arguments = mkvMA.arguments,
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
@@ -1463,11 +1463,18 @@ namespace RemuxOpt
                             File.Delete(currentFile.FileName);
                             sb.AppendLine($"The original file \"{currentFile.FileName}\" has been deleted!");
                         }
+
+                        if (_appOptions.ApplyNamingConventions)
+                        {
+                            ApplyNamingConventions(mkvMA.outputFilePath);
+                            sb.AppendLine($"The naming conventions were applied to \"{mkvMA.outputFilePath}\"!");
+                        }
                     }
                 }
                 catch (Exception ex)
                 {
                     sb.AppendLine($"[EXCEPTION] {ex.Message}");
+
                 }
 
                 sb.AppendLine(new string('-', 60));
@@ -1484,6 +1491,29 @@ namespace RemuxOpt
 
             return workerResult;
         }
+
+        private void ApplyNamingConventions(string filePath)
+        {
+            try
+            {
+                // Get directory, filename, and extension
+                string directory = Path.GetDirectoryName(filePath);
+                string fileName = Path.GetFileName(filePath);
+                string newFileName = fileName.Replace(" !", "!");
+
+                // Only rename if there's an actual change
+                if (fileName != newFileName)
+                {
+                    string newFilePath = Path.Combine(directory, newFileName);
+                    File.Move(filePath, newFilePath);
+                }
+            }
+            catch (Exception ex)
+            {
+                MsgBox.Show(this, $"Failed to apply naming conventions: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
 
         private int CalculateOverallProgress(int currentFileIndex, int totalFiles, int currentFileProgress)
         {

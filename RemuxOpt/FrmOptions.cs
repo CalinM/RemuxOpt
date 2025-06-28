@@ -9,10 +9,7 @@
             InitializeComponent();
             _appOptions = appOptions;
 
-            this.Load += FrmOptions_Load;
-
-            
-
+            Load += FrmOptions_Load;
             bSave.Click += BSave_Click;
         }
 
@@ -25,12 +22,14 @@
         {
             chkReadFilesRecursively.Checked = _appOptions.ReadFilesRecursively;
             chkDeleteOriginal.Checked = _appOptions.DeleteOriginalsAfterSuccessfulRemux;
+            chkApplyNamingConventions.Checked = _appOptions.ApplyNamingConventions;
         }
 
         private void BSave_Click(object? sender, EventArgs e)
         {
             _appOptions.ReadFilesRecursively = chkReadFilesRecursively.Checked;
             _appOptions.DeleteOriginalsAfterSuccessfulRemux = chkDeleteOriginal.Checked;
+            _appOptions.ApplyNamingConventions = chkApplyNamingConventions.Checked;
 
             DialogResult = DialogResult.OK;
         }

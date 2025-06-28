@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
@@ -6,14 +7,11 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-
     <!-- Version that the workflow will read -->
-    <Version>1.0.0.26</Version>
-
+    <Version>1.0.0.37</Version>
     <!-- Optional: Additional version-related properties -->
-    <AssemblyVersion>1.0.0.26</AssemblyVersion>
-    <FileVersion>1.0.0.26</FileVersion>
-
+    <AssemblyVersion>1.0.0.37</AssemblyVersion>
+    <FileVersion>1.0.0.37</FileVersion>
     <!-- Optional: Application metadata -->
     <AssemblyTitle>RemuxOpt</AssemblyTitle>
     <AssemblyDescription>Rutomatic remuxer</AssemblyDescription>
@@ -25,14 +23,17 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <ShouldCreateLogs>True</ShouldCreateLogs>
     <AdvancedSettingsExpanded>True</AdvancedSettingsExpanded>
-    <!-- Removed all the Update*Version and versioning-related properties -->
   </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="WindowsAPICodePack-Shell" Version="1.1.1" />
   </ItemGroup>
 
-  <Target Name="IncrementVersion" BeforeTargets="BeforeBuild">
-    <Exec Command="powershell -ExecutionPolicy Bypass -File &quot;$(ProjectDir)increment-version.ps1&quot; -CsprojPath &quot;$(MSBuildProjectFile)&quot;"
-          ContinueOnError="false" />
-  </Target>  
+  <Target Name="IncrementVersionAndGenerateNotes" BeforeTargets="BeforeBuild">
+    <!-- Increment version -->
+    <Exec Command="powershell -ExecutionPolicy Bypass -File &quot;$(ProjectDir)increment-version.ps1&quot; -CsprojPath &quot;$(MSBuildProjectFile)&quot;" ContinueOnError="false" />
+    <!-- Generate release notes (don't fail build if this fails) -->
+    <Exec Command="powershell -ExecutionPolicy Bypass -File &quot;$(ProjectDir)generate-release-notes.ps1&quot;" ContinueOnError="true" IgnoreExitCode="true" />
+  </Target>
+
 </Project>

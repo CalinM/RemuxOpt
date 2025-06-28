@@ -8,6 +8,7 @@ namespace RemuxOpt
 
         public bool ReadFilesRecursively { get; set; } = false;
         public bool DeleteOriginalsAfterSuccessfulRemux { get; set; } = false;
+        public bool ApplyNamingConventions { get; set; } = false;
 
         public AppOptions()
         {
@@ -82,6 +83,9 @@ namespace RemuxOpt
 
                     if (name == "DeleteOriginalsAfterSuccessfulRemux" && bool.TryParse(value, out bool deleteOriginals))
                         DeleteOriginalsAfterSuccessfulRemux = deleteOriginals;
+
+                    if (name == "ApplyNamingConventions" && bool.TryParse(value, out bool applyNamingConventions))
+                        ApplyNamingConventions = applyNamingConventions;
                 }
             }
         }
@@ -103,7 +107,10 @@ namespace RemuxOpt
                     new XAttribute("Value", ReadFilesRecursively.ToString().ToLower())),
                 new XElement("Option",
                     new XAttribute("Name", "DeleteOriginalsAfterSuccessfulRemux"),
-                    new XAttribute("Value", DeleteOriginalsAfterSuccessfulRemux.ToString().ToLower()))
+                    new XAttribute("Value", DeleteOriginalsAfterSuccessfulRemux.ToString().ToLower())),
+                new XElement("Option",
+                    new XAttribute("Name", "ApplyNamingConventions"),
+                    new XAttribute("Value", ApplyNamingConventions.ToString().ToLower()))
             );
 
             root.Add(options);

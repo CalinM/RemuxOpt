@@ -111,7 +111,7 @@ namespace RemuxOpt
             };
         }
 
-        public string BuildMkvMergeArgs(MkvFileInfo fileInfo)
+        public (string arguments, string outputFilePath) BuildMkvMergeArgs(MkvFileInfo fileInfo)
         {
             var audioTracks = new List<AudioTrackInfo>();
             var subtitleTracks = new List<SubtitleTrackInfo>();
@@ -409,7 +409,8 @@ namespace RemuxOpt
             if (trackOrder.Count > 0)
                 args.Add($"--track-order {string.Join(',', trackOrder)}");
 
-            return string.Join(' ', args);
+            //return new KeyValuePair<string, string>(string.Join(' ', args), outputFile);
+            return (string.Join(' ', args), outputFile);
         }
 
         private string GetLanguageName(string code)

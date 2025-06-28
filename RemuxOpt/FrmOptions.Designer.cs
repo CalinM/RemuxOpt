@@ -34,6 +34,9 @@
             chkDeleteOriginal = new CheckBox();
             bCancel = new Button();
             bSave = new Button();
+            chkApplyNamingConventions = new CheckBox();
+            label1 = new Label();
+            bAddCustomRule = new Button();
             SuspendLayout();
             // 
             // chkReadFilesRecursively
@@ -67,8 +70,9 @@
             // 
             // bCancel
             // 
+            bCancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             bCancel.DialogResult = DialogResult.Cancel;
-            bCancel.Location = new Point(672, 151);
+            bCancel.Location = new Point(667, 232);
             bCancel.Name = "bCancel";
             bCancel.Size = new Size(80, 25);
             bCancel.TabIndex = 4;
@@ -77,18 +81,51 @@
             // 
             // bSave
             // 
-            bSave.Location = new Point(586, 151);
+            bSave.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            bSave.Location = new Point(581, 232);
             bSave.Name = "bSave";
             bSave.Size = new Size(80, 25);
             bSave.TabIndex = 5;
             bSave.Text = "Save";
             bSave.UseVisualStyleBackColor = true;
             // 
+            // chkApplyNamingConventions
+            // 
+            chkApplyNamingConventions.AutoSize = true;
+            chkApplyNamingConventions.Location = new Point(12, 142);
+            chkApplyNamingConventions.Name = "chkApplyNamingConventions";
+            chkApplyNamingConventions.Size = new Size(169, 19);
+            chkApplyNamingConventions.TabIndex = 6;
+            chkApplyNamingConventions.Text = "Apply naming conventions";
+            chkApplyNamingConventions.UseVisualStyleBackColor = true;
+            // 
+            // label1
+            // 
+            label1.ForeColor = Color.Gray;
+            label1.Location = new Point(29, 164);
+            label1.Name = "label1";
+            label1.Size = new Size(718, 52);
+            label1.TabIndex = 7;
+            label1.Text = "Replace \" !\" with \"!\"";
+            // 
+            // bAddCustomRule
+            // 
+            bAddCustomRule.Enabled = false;
+            bAddCustomRule.Location = new Point(29, 193);
+            bAddCustomRule.Name = "bAddCustomRule";
+            bAddCustomRule.Size = new Size(75, 23);
+            bAddCustomRule.TabIndex = 8;
+            bAddCustomRule.Text = "Add rule";
+            bAddCustomRule.UseVisualStyleBackColor = true;
+            // 
             // FrmOptions
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(759, 188);
+            ClientSize = new Size(759, 269);
+            Controls.Add(bAddCustomRule);
+            Controls.Add(label1);
+            Controls.Add(chkApplyNamingConventions);
             Controls.Add(bSave);
             Controls.Add(bCancel);
             Controls.Add(chkDeleteOriginal);
@@ -109,5 +146,8 @@
         private CheckBox chkDeleteOriginal;
         private Button bCancel;
         private Button bSave;
+        private CheckBox chkApplyNamingConventions;
+        private Label label1;
+        private Button bAddCustomRule;
     }
 }
