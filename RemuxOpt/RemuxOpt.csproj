@@ -8,10 +8,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <!-- Version that the workflow will read -->
-    <Version>1.0.0.146</Version>
+    <Version>1.0.0.147</Version>
     <!-- Optional: Additional version-related properties -->
-    <AssemblyVersion>1.0.0.146</AssemblyVersion>
-    <FileVersion>1.0.0.146</FileVersion>
+    <AssemblyVersion>1.0.0.147</AssemblyVersion>
+    <FileVersion>1.0.0.147</FileVersion>
     <!-- Optional: Application metadata -->
     <AssemblyTitle>RemuxOpt</AssemblyTitle>
     <AssemblyDescription>Rutomatic remuxer</AssemblyDescription>
