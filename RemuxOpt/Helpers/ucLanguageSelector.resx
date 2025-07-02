@@ -117,17 +117,4 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="lbInfo1.Text" xml:space="preserve">
-    <value>When a folder is dragged onto the main form, and the above option is checked, all files from that folder and its subfolders are added to the processing list.
-A new column is added to the grid to display the full file path.
-The output folder selection is disabled in this mode. Instead, remuxed files are saved in an "Output" subfolder within each original file's folder.
-
-</value>
-  </data>
-  <data name="label2.Text" xml:space="preserve">
-    <value>Then checked, this option will remove from the original file all tracks that have a language code not present among those configured.
-If unchecked, those traks will be moved at the end of the track list, unsorted.
-
-</value>
-  </data>
 </root>

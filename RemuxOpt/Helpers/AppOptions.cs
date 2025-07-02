@@ -8,6 +8,7 @@ namespace RemuxOpt
 
         public bool ReadFilesRecursively { get; set; } = false;
         public bool DeleteOriginalsAfterSuccessfulRemux { get; set; } = false;
+        public bool RemoveUnlistedLanguageTracks { get; set; } = false;
         public bool ApplyNamingConventions { get; set; } = false;
 
         public AppOptions()
@@ -84,6 +85,9 @@ namespace RemuxOpt
                     if (name == "DeleteOriginalsAfterSuccessfulRemux" && bool.TryParse(value, out bool deleteOriginals))
                         DeleteOriginalsAfterSuccessfulRemux = deleteOriginals;
 
+                    if (name == "RemoveUnlistedLanguageTracks" && bool.TryParse(value, out bool removeUnlistedLanguageTracks))
+                        RemoveUnlistedLanguageTracks = removeUnlistedLanguageTracks;
+                
                     if (name == "ApplyNamingConventions" && bool.TryParse(value, out bool applyNamingConventions))
                         ApplyNamingConventions = applyNamingConventions;
                 }
@@ -109,8 +113,11 @@ namespace RemuxOpt
                     new XAttribute("Name", "DeleteOriginalsAfterSuccessfulRemux"),
                     new XAttribute("Value", DeleteOriginalsAfterSuccessfulRemux.ToString().ToLower())),
                 new XElement("Option",
+                    new XAttribute("Name", "RemoveUnlistedLanguageTracks"),
+                    new XAttribute("Value", RemoveUnlistedLanguageTracks.ToString().ToLower())),
+                new XElement("Option",
                     new XAttribute("Name", "ApplyNamingConventions"),
-                    new XAttribute("Value", ApplyNamingConventions.ToString().ToLower()))
+                    new XAttribute("Value", ApplyNamingConventions.ToString().ToLower()))   
             );
 
             root.Add(options);

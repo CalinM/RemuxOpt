@@ -7,7 +7,6 @@ using System.IO;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Windows.Forms;
 using System.Xml.Linq;
 using static System.Windows.Forms.ListViewItem;
 using ListView = System.Windows.Forms.ListView;
@@ -19,6 +18,10 @@ namespace RemuxOpt
     {
         private BackgroundWorker _backgroundWorker;
         private HorizontalScrollDataGridView _dataGridViewResults;
+        private readonly ContextMenuStrip _headerContextMenu = new();
+        private string? _clickedColumnNameForContext = null;
+        private Label _dragTooltipLabel;
+
         private AppOptions _appOptions = new AppOptions();
         public FrmMain()
         {
@@ -42,11 +45,23 @@ namespace RemuxOpt
             btnAddSubtitleLanguage.LinkClicked += LbAddSubtitleLanguage_LinkClicked;
 
 
-            pFiles.DragEnter += (s, e) => e.Effect = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
+            pFiles.DragEnter += HandleDragEffect;
+            pFiles.DragOver += HandleDragEffect;
+            pFiles.DragLeave += (s, e) => _dragTooltipLabel.Visible = false;
+
             pFiles.DragDrop += async (s, e) =>
             {
+                _dragTooltipLabel.Visible = false;
                 lbDragFolderHere.Visible = false;
-                ClearPreviousFilesDetails();
+
+                // Check if Ctrl key was pressed during drop
+                bool ctrlPressed = (e.KeyState & 8) == 8;
+    
+                if (!ctrlPressed)
+                {
+                    ClearPreviousFilesDetails();
+                }
+                
                 tcGrid.SelectTab(tpGrid);
                 
                 var paths = (string[])e.Data.GetData(DataFormats.FileDrop);
@@ -133,7 +148,9 @@ namespace RemuxOpt
                     RemoveForcedFlags = chkRemoveAttachments.Checked,
                     OutputFolder = btbOutputPath.Text,
                     RemoveFileTitle = chkRemoveFileTitle.Checked,
-                    DefaultTrackLanguageCode = GetDefaultLanguageCode(),
+                    RemoveUnlistedLanguageTracks = _appOptions.RemoveUnlistedLanguageTracks,
+                    DefaultAudioTrackLanguageCode = GetDefaultLanguageCode(lvAudioTracks),
+                    DefaultSubtitleTrackLanguageCode = GetDefaultLanguageCode(lvSubtitleTracks),
                     AudioLanguageOrder = GetAudioLanguageCodes(lvAudioTracks),
                     SubtitleLanguageOrder = GetAudioLanguageCodes(lvSubtitleTracks)
                 };
@@ -166,6 +183,51 @@ namespace RemuxOpt
                 }
             };
         }
+
+        private void InitializeDragTooltip()
+        {
+            _dragTooltipLabel = new Label
+            {
+                Text = "Append files ...",
+                BackColor = SystemColors.Info,
+                ForeColor = SystemColors.InfoText,
+                BorderStyle = BorderStyle.FixedSingle,
+                AutoSize = true,
+                Visible = false,
+                Font = new Font("Segoe UI", 8f)
+            };
+            this.Controls.Add(_dragTooltipLabel);
+            _dragTooltipLabel.BringToFront();
+        }
+
+        void HandleDragEffect(object s, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                bool ctrlPressed = (e.KeyState & 8) == 8; // 8 is the flag for Ctrl key
+                e.Effect = ctrlPressed ? DragDropEffects.Link : DragDropEffects.Copy;
+        
+                // Show tooltip when Ctrl is pressed
+                if (ctrlPressed && _dataGridViewResults.Rows.Count > 0)
+                {
+                    var screenPos = new Point(e.X, e.Y);
+                    var clientPos = this.PointToClient(screenPos);
+            
+                    _dragTooltipLabel.Location = new Point(clientPos.X + 10, clientPos.Y - 25);
+                    _dragTooltipLabel.Visible = true;
+                }
+                else
+                {
+                    _dragTooltipLabel.Visible = false;
+                }
+            }
+            else
+            {
+                e.Effect = DragDropEffects.None;
+                _dragTooltipLabel.Visible = false;
+            }
+        }
+
 
         private List<string> GetAudioLanguageCodes(ListView listview)
         {
@@ -256,13 +318,13 @@ namespace RemuxOpt
             }
         }
 
-        private string GetDefaultLanguageCode()
+        private string GetDefaultLanguageCode(ListView listview)
         {
             XDocument doc = XDocument.Load("config.xml");
 
             string? defaultAudioLangCode = doc
                 .Root?
-                .Element("lvAudioTracks")?
+                .Element(listview.Name)?
                 .Elements("Language")
                 .FirstOrDefault(x => string.Equals(x.Attribute("IsDefault")?.Value, "true", StringComparison.OrdinalIgnoreCase))
                 ?.Attribute("Code")?.Value;
@@ -291,21 +353,94 @@ namespace RemuxOpt
 
             tpGrid.Controls.Add(_dataGridViewResults);
             InitializeGridContextMenu();
+            InitializeDragTooltip();
 
             _dataGridViewResults.CellFormatting += _dataGridViewResults_CellFormatting;
+            _dataGridViewResults.CellValueChanged += _dataGridViewResults_CellValueChanged;
+            _dataGridViewResults.ColumnHeaderMouseClick += _dataGridViewResults_ColumnHeaderMouseClick;
+        }
+
+        private void _dataGridViewResults_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+
+            var row = _dataGridViewResults.Rows[e.RowIndex];
+            if (row.Tag is not MkvFileInfo file)
+            {
+                return;
+            }
+
+            var columnName = _dataGridViewResults.Columns[e.ColumnIndex].Name;
+            if (
+                !(columnName.StartsWith("Audio") && columnName.EndsWith("_Lang")) &&
+                columnName != "ExternalAudioLanguage"
+            )
+            { 
+                return;
+            }
+
+            string? newValue = row.Cells[e.ColumnIndex].Value?.ToString();
+
+            if (columnName == "ExternalAudioLanguage")
+            {
+                var extAudio = file.ExternalAudioTracks.FirstOrDefault();
+                if (extAudio != null)
+                {
+                    extAudio.Language = newValue;
+                }
+            }
+            else
+            {
+                var match = Regex.Match(columnName, @"Audio(\d+)_Lang");
+                if (!match.Success) return;
+
+                int trackIndex = int.Parse(match.Groups[1].Value);
+                if (trackIndex >= file.AudioTracks.Count) return;
+
+                file.AudioTracks[trackIndex].Language = newValue;
+            }
+
+            row.Cells[e.ColumnIndex].Tag = "edited";
+
+            row.Cells[e.ColumnIndex].Style.Font = new Font(_dataGridViewResults.Font, FontStyle.Bold);
+        }
+
+        private void _dataGridViewResults_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right) return;
+
+            var column = _dataGridViewResults.Columns[e.ColumnIndex];
+
+            // Only show for specific columns
+            if ((!column.Name.StartsWith("Audio") || !column.Name.EndsWith("_Lang")) && column.Name != "ExternalAudioLanguage")
+            {
+                return;
+            }
+
+            _clickedColumnNameForContext = column.Name;
+
+            _headerContextMenu.Show(_dataGridViewResults, _dataGridViewResults.PointToClient(Cursor.Position));
         }
 
         private void InitializeGridContextMenu()
         {
-            var contextMenu = new ContextMenuStrip();
-            contextMenu.Items.Add("Assign/update a language code ...").Click += (s, e) => UpdateLanguageCode();
-
-            _dataGridViewResults.ContextMenuStrip = contextMenu;
+            _headerContextMenu.Items.Add("Assign/update a language code ...").Click += (s, e) => UpdateLanguageCode();
         }
 
         private void UpdateLanguageCode()
         {
+            var selectedFiles = GetCheckedFilenames();
 
+            using var addLanguageForm = new FrmAddLanguage(new List<string>(), $"Update the language code on field \"{_clickedColumnNameForContext}\" for the loaded data ({selectedFiles.Count} files selected)");
+            if (addLanguageForm.ShowDialog(this) == DialogResult.OK)
+            {
+                if (MsgBox.Show(this, $"Are you sure you want to set \"{addLanguageForm.SelectedLanguage.Name}\" on all selected files ({selectedFiles.Count})", "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No)
+                {
+                    return;
+                }
+                
+                UpdateFieldByColumnName(selectedFiles, addLanguageForm.SelectedLanguage.Abr3a);                    
+            }
         }
 
         private void _dataGridViewResults_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
@@ -331,16 +466,31 @@ namespace RemuxOpt
                 e.CellStyle.BackColor = Color.WhiteSmoke;
             }
 
-            if (columnName == "ExternalAudioType" || columnName == "ExternalAudioLanguage")
+            var audioCodes = GetAudioLanguageCodes(lvAudioTracks);
+
+            if (columnName == "ExternalAudioType")
             {
-                e.CellStyle.BackColor = Color.AntiqueWhite;
+                ExternalAudioFileCellStyle();
             }
 
-            // Check if the column is an Audio Lang column like "Audio0_Lang", "Audio1_Lang", ...
-            if (columnName.StartsWith("Audio") && columnName.EndsWith("_Lang"))
+            if (columnName == "ExternalAudioLanguage")
             {
-                var languagesCode = GetAudioLanguageCodes(lvAudioTracks);
+                var langCell = dgv.Rows[e.RowIndex].Cells[e.ColumnIndex];
+                var langValue = Convert.ToString(langCell.Value)?.Trim();
 
+                if (!string.IsNullOrEmpty(langValue) && !audioCodes.Contains(langValue))
+                {
+                    UnknownLanguageOrLanguageNotConfiguredCellStyle();
+                }
+                else
+                {
+                    ExternalAudioFileCellStyle();
+                }
+            }
+
+            // Check if the column is an Audio Lang column like "Audio0_Lang", "Audio1_Lang", ... ExternalAudioLanguage
+            if (columnName.StartsWith("Audio") && columnName.EndsWith("_Lang") || columnName == "ExternalAudioLanguage")
+            {
                 // Extract the audio index from column name
                 string indexStr = Regex.Replace(columnName, @"\D", ""); // Remove non-digits
                 if (int.TryParse(indexStr, out int audioIndex))
@@ -348,7 +498,7 @@ namespace RemuxOpt
                     var langCell = dgv.Rows[e.RowIndex].Cells[e.ColumnIndex];
                     var langValue = Convert.ToString(langCell.Value)?.Trim();
 
-                    var languageNotConfigured = !string.IsNullOrEmpty(langValue) && !languagesCode.Contains(langValue);
+                    var languageNotConfigured = !string.IsNullOrEmpty(langValue) && !audioCodes.Contains(langValue);
 
                     // Get the forced flag from hidden column
                     var forcedCell = dgv.Rows[e.RowIndex].Cells[$"IsForced{audioIndex}"];
@@ -368,13 +518,11 @@ namespace RemuxOpt
 
                     if (languageNotConfigured)
                     {
-                        e.CellStyle.BackColor = Color.Red;
-                        e.CellStyle.ForeColor = Color.White;
+                        UnknownLanguageOrLanguageNotConfiguredCellStyle();
                     }
                     else if (isForced)
                     {
-                        e.CellStyle.BackColor = Color.LightCoral;
-                        e.CellStyle.ForeColor = Color.Black;
+                        ForcedTrackCellStyle();
                     }
                 }
             }
@@ -382,7 +530,7 @@ namespace RemuxOpt
             // Check if the column is an Subtile Lang column like "Sub0_Lang", "Sub1_Lang", ...
             if (columnName.StartsWith("Sub") && columnName.EndsWith("_Lang"))
             {
-                var languagesCode = GetAudioLanguageCodes(lvSubtitleTracks);
+                var subtitlesCodes = GetAudioLanguageCodes(lvSubtitleTracks);
 
                 // Extract the index number from column name
                 // Example: "Sub0_Lang" -> 0
@@ -392,7 +540,7 @@ namespace RemuxOpt
                     var langCell = dgv.Rows[e.RowIndex].Cells[e.ColumnIndex];
                     var langValue = Convert.ToString(langCell.Value)?.Trim();
 
-                    var languageNotConfigured = !string.IsNullOrEmpty(langValue) && !languagesCode.Contains(langValue);
+                    var languageNotConfigured = !string.IsNullOrEmpty(langValue) && !subtitlesCodes.Contains(langValue);
 
                     // Get the forced flag value from hidden column
                     var forcedCell = dgv.Rows[e.RowIndex].Cells[$"SubIsForced{audioIndex}"];
@@ -408,15 +556,38 @@ namespace RemuxOpt
 
                     if (languageNotConfigured)
                     {
-                        e.CellStyle.BackColor = Color.Red;
-                        e.CellStyle.ForeColor = Color.White;
+                        UnknownLanguageOrLanguageNotConfiguredCellStyle();
                     }
                     else if (isForced)
                     {
-                        e.CellStyle.BackColor = Color.LightCoral; // or Color.Red
-                        e.CellStyle.ForeColor = Color.Black;
+                        ForcedTrackCellStyle();
                     }
                 }
+            }
+
+            var cell = _dataGridViewResults.Rows[e.RowIndex].Cells[e.ColumnIndex];
+
+            if (cell.Tag?.ToString() == "edited")
+            {
+                e.CellStyle.Font = new Font(_dataGridViewResults.Font, FontStyle.Bold);
+            }
+
+
+            void UnknownLanguageOrLanguageNotConfiguredCellStyle()
+            {
+                e.CellStyle.BackColor = Color.Red;
+                e.CellStyle.ForeColor = Color.White;
+            }
+
+            void ExternalAudioFileCellStyle()
+            {
+                e.CellStyle.BackColor = Color.AntiqueWhite;
+            }
+
+            void ForcedTrackCellStyle()
+            {
+                e.CellStyle.BackColor = Color.LightCoral;
+                e.CellStyle.ForeColor = Color.Black;
             }
         }
 
@@ -638,8 +809,7 @@ namespace RemuxOpt
             _dataGridViewResults.Rows.Clear();
 
             int maxAudio = files.Max(f => f.AudioTracks.Count);
-            int maxSubs = files.Max(f => f.Subtitles.Count);
-            var hasExternalAudio = files.FirstOrDefault(x => x.ExternalAudioFiles.Any()) != null;
+            int maxSubs = files.Max(f => f.SubtitleTracks.Count);
 
             //System columns
             var checkCol = new DataGridViewCheckBoxColumn
@@ -674,6 +844,8 @@ namespace RemuxOpt
                     });
             }
 
+            var hasExternalAudio = files.FirstOrDefault(x => x.ExternalAudioTracks.Any()) != null;
+
             // External audio column
             if (hasExternalAudio)
             {
@@ -685,10 +857,11 @@ namespace RemuxOpt
             // Audio columns
             for (int i = 0; i < maxAudio; i++)
             {
-                _dataGridViewResults.Columns.Add($"Audio{i}_Lang", $"Audio{i + 1} Lang");
+                _dataGridViewResults.Columns.Add($"Audio{i}_Lang", $"Audio{i + 1} Language");
                 _dataGridViewResults.Columns.Add($"Audio{i}_Title", $"Audio{i + 1} Title");
+                _dataGridViewResults.Columns.Add($"Audio{i}_CodecId", $"Audio{i + 1} Codec");
                 _dataGridViewResults.Columns.Add($"Audio{i}_Ch", $"Audio{i + 1} Ch");
-                _dataGridViewResults.Columns.Add($"Audio{i}_Bitrate", $"Audio{i + 1} kbps");
+                _dataGridViewResults.Columns.Add($"Audio{i}_Bitrate", $"Audio{i + 1} Bitrate");
 
                 var forcedCol = new DataGridViewTextBoxColumn
                 {
@@ -714,20 +887,9 @@ namespace RemuxOpt
             }
 
             _dataGridViewResults.Columns.Add("Attachments", "Attachments");
-
-            foreach (DataGridViewColumn gridCol in _dataGridViewResults.Columns)
-            {
-                if (gridCol is DataGridViewCheckBoxColumn)
-                {
-                    continue; // Skip checkbox column
-                }
-
-                gridCol.ReadOnly = true;
-            }
-
-
-
             _dataGridViewResults.AddHeaderCheckBoxToColumn(0);
+
+
 
             // Rows
             foreach (var file in files)
@@ -743,18 +905,25 @@ namespace RemuxOpt
                     row.Add(file.FilePath);
                 }
 
-                if (hasExternalAudio)
+                if (file.ExternalAudioTracks.Any())
                 {
-                    var eaf = file.ExternalAudioFiles.FirstOrDefault(); //only one is supported for display and process (todo more)
+                    var eaf = file.ExternalAudioTracks.FirstOrDefault(); //only one is supported for display and process (todo more)
 
                     row.Add(eaf.Extension);
-                    row.Add(eaf.LanguageCode);
+                    row.Add(eaf.Language);
                 }
+                else if (hasExternalAudio)
+                {
+                    row.Add(string.Empty);
+                    row.Add(string.Empty);
+                }
+
 
                 foreach (var a in file.AudioTracks)
                 {
                     row.Add(a.Language);
                     row.Add(a.Title);
+                    row.Add(a.CodecId);
                     row.Add(a.Channels);
                     row.Add(a.BitRate.HasValue ? (a.BitRate.Value / 1000).ToString() : "");
                     row.Add(a.IsForced);
@@ -764,19 +933,20 @@ namespace RemuxOpt
                 {
                     row.Add("");        //language
                     row.Add("");        //title
+                    row.Add("");        //codec
                     row.Add("");        //channels
                     row.Add("");        //bitRate
                     row.Add("false");   //forced                    
                 }
 
-                foreach (var s in file.Subtitles)
+                foreach (var s in file.SubtitleTracks)
                 {
                     row.Add(s.Language);
                     row.Add(s.Title);
                     row.Add(s.IsForced);
                 }
 
-                for (var i = file.Subtitles.Count; i < maxSubs; i++)
+                for (var i = file.SubtitleTracks.Count; i < maxSubs; i++)
                 { 
                     row.Add("");        //language
                     row.Add("");        //title
@@ -804,10 +974,32 @@ namespace RemuxOpt
 
             _dataGridViewResults.HeaderCheckState = true;
 
-            var invalid = CountInvalidLanguageCodes();
-            if (invalid > 0)
+            foreach (DataGridViewColumn gridCol in _dataGridViewResults.Columns)
+            {
+                if (gridCol is DataGridViewCheckBoxColumn)
+                {
+                    continue; // Skip checkbox column
+                }
+
+                gridCol.ReadOnly = true;
+            }
+
+            var invalidRowCells = CountInvalidLanguageCodes();
+            if (invalidRowCells.Count > 0)
             { 
-                MsgBox.Show(this, $"{invalid} files have audio tracks with unrecognized language codes.", "Validation Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MsgBox.Show(this, $"{invalidRowCells.Count} files have audio tracks with unrecognized language codes!\n\nThe cells can be manually edited or a mass update option can be triggered by right clicking the columns headers.", "Validation Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+                //making the cells having issues editable
+                foreach (var kvp in invalidRowCells)
+                {
+                    var row = _dataGridViewResults.Rows[kvp.Key];
+
+                    foreach (int cellIndex in kvp.Value)
+                    {
+                        var cell = row.Cells[cellIndex];
+                        cell.ReadOnly = false;
+                    }
+                }
             }
 
             _dataGridViewResults.ResumeLayout();
@@ -841,30 +1033,33 @@ namespace RemuxOpt
             }
         }
 
-        private int CountInvalidLanguageCodes()
+        private Dictionary<int, List<int>> CountInvalidLanguageCodes()
         {
-            int badFileCount = 0;
-            var badRows = new HashSet<int>();
-            var languagesCode = GetAudioLanguageCodes(lvAudioTracks);
+            var result = new Dictionary<int, List<int>>();
+            var validCodes = GetAudioLanguageCodes(lvAudioTracks);
 
             foreach (DataGridViewRow row in _dataGridViewResults.Rows)
             {
                 foreach (DataGridViewColumn col in _dataGridViewResults.Columns)
                 {
-                    if (col.Name.StartsWith("Audio") && col.Name.EndsWith("_Lang"))
+                    if ((col.Name.StartsWith("Audio") && col.Name.EndsWith("_Lang")) || col.Name == "ExternalAudioLanguage")
                     {
                         var langValue = Convert.ToString(row.Cells[col.Index].Value)?.Trim();
-                        if (!string.IsNullOrEmpty(langValue) && !languagesCode.Contains(langValue))
+
+                        if (!string.IsNullOrEmpty(langValue) && !validCodes.Contains(langValue))
                         {
-                            badRows.Add(row.Index);
-                            break; // Only count each file once
+                            if (!result.ContainsKey(row.Index))
+                            { 
+                                result[row.Index] = new List<int>();
+                            }
+
+                            result[row.Index].Add(col.Index);
                         }
                     }
                 }
             }
 
-            badFileCount = badRows.Count;
-            return badFileCount;
+            return result;
         }
 
         private void BuildTextView(List<MkvFileInfo> files)
@@ -891,10 +1086,11 @@ namespace RemuxOpt
                     };
 
                     var bitrate = audio.BitRate.HasValue ? $"{audio.BitRate.Value / 1000} kbps" : "unknown bitrate";
-                    sb.AppendLine($"  Audio [{audio.Language}]: {channels} @ {bitrate} - {audio.Title}");
+                    sb.AppendLine($"  Audio [{audio.Language}]: {channels} @ {bitrate}" + 
+                        (string.IsNullOrEmpty(audio.Title) ? "" : $" - {audio.Title}"));
                 }
 
-                foreach (var sub in file.Subtitles)
+                foreach (var sub in file.SubtitleTracks)
                 {
                     sb.AppendLine($"  Subtitle [{sub.Language}]: {sub.Title}");
                 }
@@ -1068,11 +1264,7 @@ namespace RemuxOpt
             listView.InsertionMark.AppearsAfterItem = false; // Show before the item
             listView.FullRowSelect = true;
 
-            if (listView.Name == "lvAudioTracks")
-            {
-                InitializeListViewContextMenu(listView);
-            }
-
+            InitializeListViewContextMenu(listView);
             LoadListFromXml(listView);
         }
 
@@ -1080,6 +1272,12 @@ namespace RemuxOpt
         {
             var contextMenu = new ContextMenuStrip();
             contextMenu.Items.Add("Set default").Click += (s, e) => SetDefaultAudioLanguage(listView);
+
+            if (listView.Name == "lvSubtitleTracks")
+            {
+                contextMenu.Items.Add("-");
+                contextMenu.Items.Add("No default").Click += (s, e) => SetNoDefault(listView);
+            }
 
             listView.MouseDown += (sender, e) => ListView_MouseDown(listView, e, contextMenu);
         }
@@ -1110,6 +1308,16 @@ namespace RemuxOpt
             }
         }
 
+        private void SetNoDefault(ListView listView)
+        {
+            foreach (ListViewItem item in listView.Items)
+            {
+                item.Font = listView.Font;
+            }
+
+            SaveListToXml();
+        }
+
         private void LvGeneric_ItemDrag(object sender, ItemDragEventArgs e)
         {
             ((ListView)sender).DoDragDrop(e.Item, DragDropEffects.Move);
@@ -1135,7 +1343,9 @@ namespace RemuxOpt
             var listView = (ListView)sender;
 
             if (!e.Data.GetDataPresent(typeof(ListViewItem)))
+            { 
                 return;
+            }
 
             ListViewItem draggedItem = (ListViewItem)e.Data.GetData(typeof(ListViewItem));
             int sourceIndex = listView.Items.IndexOf(draggedItem);
@@ -1209,8 +1419,9 @@ namespace RemuxOpt
             ListViewHitTestInfo hit = serverLv.HitTest(e.Location);
             if (hit.Item != null && hit.SubItem == hit.Item.SubItems[2]) // Last column
             {
-                serverLv.Items.Remove(hit.Item); // Remove item
-                SaveListToXml(); // Persist changes
+                serverLv.Items.Remove(hit.Item);
+                SaveListToXml();
+                _dataGridViewResults.Invalidate();
             }
         }
 
@@ -1296,13 +1507,14 @@ namespace RemuxOpt
                            .ToList();
 
 
-            var addLanguageForm = new FrmAddLanguage(selectedCodes);
+            using var addLanguageForm = new FrmAddLanguage(selectedCodes, "Select a language from the list below to add it to your configuration:");
             PositionModal(addLanguageForm, (LinkLabel)sender, this, 10);
 
             if (addLanguageForm.ShowDialog() == DialogResult.OK)
             {
                 AddLanguageToListView(targetListView, addLanguageForm.SelectedLanguage, isDefault: false);
                 SaveListToXml();
+                _dataGridViewResults.Invalidate();
             }
         }
 
@@ -1375,7 +1587,8 @@ namespace RemuxOpt
                         lvSubtitleTracks.Items.Cast<ListViewItem>().Select(item =>
                             new XElement("Language",
                                 new XAttribute("Name", item.Text),
-                                new XAttribute("Code", item.Tag?.ToString() ?? string.Empty)
+                                new XAttribute("Code", item.Tag?.ToString() ?? string.Empty),
+                                new XAttribute("IsDefault", item.Font.Bold ? "true" : "false")
                             )
                         )
                     )
@@ -1393,6 +1606,89 @@ namespace RemuxOpt
                 .Select(row => (MkvFileInfo)row.Tag)
                 .ToList();
         }
+
+        private void UpdateFieldByColumnName(List<MkvFileInfo> files, string newValue)
+        {
+            foreach (DataGridViewRow row in _dataGridViewResults.Rows)
+            {
+                if (row.Tag is not MkvFileInfo file || !files.Contains(file))
+                    continue;
+
+                // === Update object ===
+                if (_clickedColumnNameForContext == "ExternalAudioLanguage")
+                {
+                    var extAudio = file.ExternalAudioTracks.FirstOrDefault();
+                    if (extAudio != null)
+                    {
+                        SetPropertyValue(extAudio, "Language", newValue);
+                    }
+                }
+                else
+                {
+                    var match = Regex.Match(_clickedColumnNameForContext, @"^(Audio|Sub)(\d+)_(\w+)$");
+                    if (!match.Success)
+                        continue;
+
+                    string listType = match.Groups[1].Value;
+                    int index = int.Parse(match.Groups[2].Value);
+                    string propertyName = match.Groups[3].Value;
+
+                    object? targetItem = null;
+
+                    if (listType == "Audio" && index < file.AudioTracks.Count)
+                    {
+                        targetItem = file.AudioTracks[index];
+                    }
+                    else if (listType == "Sub" && index < file.SubtitleTracks.Count)
+                    {
+                        targetItem = file.SubtitleTracks[index];
+                    }
+
+                    if (targetItem != null)
+                    {
+                        SetPropertyValue(targetItem, propertyName, newValue);
+                    }
+                }
+
+                // === Update grid cell ===
+                if (_dataGridViewResults.Columns.Contains(_clickedColumnNameForContext))
+                {
+                    var cell = row.Cells[_clickedColumnNameForContext];
+                    cell.Value = newValue;
+
+                    // Optional: visually mark it as updated (bold)
+                    cell.Style.Font = new Font(_dataGridViewResults.Font, FontStyle.Bold);
+                    cell.Tag = "edited";
+                }
+            }
+        }
+
+        private void SetPropertyValue(object target, string propertyName, string? value)
+        {
+            var prop = target.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (prop == null || !prop.CanWrite) return;
+
+            object? typedValue = value;
+
+            try
+            {
+                if (prop.PropertyType == typeof(int) && int.TryParse(value, out int intVal))
+                    typedValue = intVal;
+                else if (prop.PropertyType == typeof(bool) && bool.TryParse(value, out bool boolVal))
+                    typedValue = boolVal;
+                else if (prop.PropertyType == typeof(int?) && int.TryParse(value, out int nullableInt))
+                    typedValue = nullableInt;
+                else if (prop.PropertyType != typeof(string) && string.IsNullOrWhiteSpace(value))
+                    typedValue = null;
+
+                prop.SetValue(target, typedValue);
+            }
+            catch
+            {
+                // Log or ignore invalid conversion
+            }
+        }
+
         private WorkerResult RunRemuxProcess(BackgroundWorkerContext context, BackgroundWorker worker, DoWorkEventArgs e)
         {
             var workerResult = new WorkerResult();
@@ -1448,7 +1744,7 @@ namespace RemuxOpt
 
                     var psi = new ProcessStartInfo
                     {
-                        FileName = remuxHelper.MkvMergePath,
+                        FileName = Common.MkvMergePath,
                         Arguments = mkvMA.arguments,
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,

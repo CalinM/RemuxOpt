@@ -1,6 +1,6 @@
 ﻿namespace RemuxOpt
 {
-    partial class FrmAddLanguage
+    partial class FrmLanguageTrackCorrection
     {
         /// <summary>
         /// Required designer variable.
@@ -29,56 +29,34 @@
         private void InitializeComponent()
         {
             lbInfo = new Label();
-            btnOk = new Button();
-            btnCancel = new Button();
             SuspendLayout();
             // 
             // lbInfo
             // 
-            lbInfo.Location = new Point(12, 25);
+            lbInfo.AutoSize = true;
+            lbInfo.Location = new Point(12, 22);
             lbInfo.Name = "lbInfo";
-            lbInfo.Size = new Size(367, 32);
+            lbInfo.Size = new Size(389, 15);
             lbInfo.TabIndex = 0;
-            lbInfo.Text = "info placeholder";
+            lbInfo.Text = "Update the language code on field X for the loaded data (y files selected)";
             // 
-            // btnOk
-            // 
-            btnOk.Location = new Point(215, 109);
-            btnOk.Name = "btnOk";
-            btnOk.Size = new Size(79, 25);
-            btnOk.TabIndex = 2;
-            btnOk.Text = "Ok";
-            btnOk.UseVisualStyleBackColor = true;
-            // 
-            // btnCancel
-            // 
-            btnCancel.DialogResult = DialogResult.Cancel;
-            btnCancel.Location = new Point(300, 109);
-            btnCancel.Name = "btnCancel";
-            btnCancel.Size = new Size(79, 25);
-            btnCancel.TabIndex = 3;
-            btnCancel.Text = "Cancel";
-            btnCancel.UseVisualStyleBackColor = true;
-            // 
-            // FrmAddLanguage
+            // FrmLanguageTrackCorrection
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(400, 147);
-            Controls.Add(btnCancel);
-            Controls.Add(btnOk);
+            ClientSize = new Size(800, 450);
             Controls.Add(lbInfo);
             FormBorderStyle = FormBorderStyle.FixedToolWindow;
-            Name = "FrmAddLanguage";
+            Name = "FrmLanguageTrackCorrection";
             StartPosition = FormStartPosition.CenterParent;
-            Text = "Available languages";
+            Text = "Language track correction";
+            Load += FrmLanguageTrackCorrection_Load;
             ResumeLayout(false);
+            PerformLayout();
         }
 
         #endregion
 
         private Label lbInfo;
-        private Button btnOk;
-        private Button btnCancel;
     }
 }

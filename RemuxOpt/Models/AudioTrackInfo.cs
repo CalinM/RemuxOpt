@@ -11,5 +11,13 @@
         public int? BitRate { get; set; }
         public string Title { get; set; }
         public string FileName { get; set; }   // needed to append file paths after arguments
+
+        public string Extension
+        { 
+            get
+            {
+                return Path.GetExtension(FileName);
+            }
+        }
     }
 }

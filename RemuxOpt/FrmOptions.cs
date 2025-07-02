@@ -22,6 +22,7 @@
         {
             chkReadFilesRecursively.Checked = _appOptions.ReadFilesRecursively;
             chkDeleteOriginal.Checked = _appOptions.DeleteOriginalsAfterSuccessfulRemux;
+            chkRemoveUnlistedLanguageTracks.Checked = _appOptions.RemoveUnlistedLanguageTracks;
             chkApplyNamingConventions.Checked = _appOptions.ApplyNamingConventions;
         }
 
@@ -30,6 +31,7 @@
             _appOptions.ReadFilesRecursively = chkReadFilesRecursively.Checked;
             _appOptions.DeleteOriginalsAfterSuccessfulRemux = chkDeleteOriginal.Checked;
             _appOptions.ApplyNamingConventions = chkApplyNamingConventions.Checked;
+            _appOptions.RemoveUnlistedLanguageTracks = chkRemoveUnlistedLanguageTracks.Checked;
 
             DialogResult = DialogResult.OK;
         }

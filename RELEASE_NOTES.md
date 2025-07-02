@@ -1,6 +1,6 @@
-﻿# Release Notes - Version 1.0.0.60
+﻿# Release Notes - Version 1.0.0.146
 
-**Release Date:** 2025-06-28
+**Release Date:** 2025-07-02
 
 ## 🚀 New Features
 - Added a new category of options to apply certain file names conventions (ongoing). [285d690]
@@ -14,5 +14,5 @@
 - Update release.yml [b0d79d6]
 
 ---
-**Full Changelog:** v1.0.0.15...1.0.0.60
+**Full Changelog:** v1.0.0.15...1.0.0.146
 **Commits in this release:** 5

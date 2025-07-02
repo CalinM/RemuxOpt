@@ -36,6 +36,8 @@
             bSave = new Button();
             chkApplyNamingConventions = new CheckBox();
             label1 = new Label();
+            chkRemoveUnlistedLanguageTracks = new CheckBox();
+            label2 = new Label();
             bAddCustomRule = new Button();
             SuspendLayout();
             // 
@@ -72,7 +74,7 @@
             // 
             bCancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             bCancel.DialogResult = DialogResult.Cancel;
-            bCancel.Location = new Point(667, 232);
+            bCancel.Location = new Point(667, 322);
             bCancel.Name = "bCancel";
             bCancel.Size = new Size(80, 25);
             bCancel.TabIndex = 4;
@@ -82,7 +84,7 @@
             // bSave
             // 
             bSave.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            bSave.Location = new Point(581, 232);
+            bSave.Location = new Point(581, 322);
             bSave.Name = "bSave";
             bSave.Size = new Size(80, 25);
             bSave.TabIndex = 5;
@@ -92,7 +94,7 @@
             // chkApplyNamingConventions
             // 
             chkApplyNamingConventions.AutoSize = true;
-            chkApplyNamingConventions.Location = new Point(12, 142);
+            chkApplyNamingConventions.Location = new Point(12, 201);
             chkApplyNamingConventions.Name = "chkApplyNamingConventions";
             chkApplyNamingConventions.Size = new Size(169, 19);
             chkApplyNamingConventions.TabIndex = 6;
@@ -102,19 +104,38 @@
             // label1
             // 
             label1.ForeColor = Color.Gray;
-            label1.Location = new Point(29, 164);
+            label1.Location = new Point(29, 223);
             label1.Name = "label1";
-            label1.Size = new Size(718, 52);
+            label1.Size = new Size(718, 19);
             label1.TabIndex = 7;
             label1.Text = "Replace \" !\" with \"!\"";
+            // 
+            // chkRemoveUnlistedLanguageTracks
+            // 
+            chkRemoveUnlistedLanguageTracks.AutoSize = true;
+            chkRemoveUnlistedLanguageTracks.Location = new Point(12, 139);
+            chkRemoveUnlistedLanguageTracks.Name = "chkRemoveUnlistedLanguageTracks";
+            chkRemoveUnlistedLanguageTracks.Size = new Size(323, 19);
+            chkRemoveUnlistedLanguageTracks.TabIndex = 9;
+            chkRemoveUnlistedLanguageTracks.Text = "Remove the tracks in languages that are NOT configured";
+            chkRemoveUnlistedLanguageTracks.UseVisualStyleBackColor = true;
+            // 
+            // label2
+            // 
+            label2.ForeColor = Color.Gray;
+            label2.Location = new Point(29, 161);
+            label2.Name = "label2";
+            label2.Size = new Size(718, 31);
+            label2.TabIndex = 10;
+            label2.Text = resources.GetString("label2.Text");
             // 
             // bAddCustomRule
             // 
             bAddCustomRule.Enabled = false;
-            bAddCustomRule.Location = new Point(29, 193);
+            bAddCustomRule.Location = new Point(29, 245);
             bAddCustomRule.Name = "bAddCustomRule";
             bAddCustomRule.Size = new Size(75, 23);
-            bAddCustomRule.TabIndex = 8;
+            bAddCustomRule.TabIndex = 11;
             bAddCustomRule.Text = "Add rule";
             bAddCustomRule.UseVisualStyleBackColor = true;
             // 
@@ -122,8 +143,10 @@
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(759, 269);
+            ClientSize = new Size(759, 359);
             Controls.Add(bAddCustomRule);
+            Controls.Add(label2);
+            Controls.Add(chkRemoveUnlistedLanguageTracks);
             Controls.Add(label1);
             Controls.Add(chkApplyNamingConventions);
             Controls.Add(bSave);
@@ -148,6 +171,8 @@
         private Button bSave;
         private CheckBox chkApplyNamingConventions;
         private Label label1;
+        private CheckBox chkRemoveUnlistedLanguageTracks;
+        private Label label2;
         private Button bAddCustomRule;
     }
 }

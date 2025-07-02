@@ -1,8 +1,4 @@
-﻿using System.Diagnostics;
-using System.Text;
-using System.Text.Json;
-
-namespace RemuxOpt
+﻿namespace RemuxOpt
 {
     public class MkvRemuxHelper
     {
@@ -10,255 +6,53 @@ namespace RemuxOpt
         public bool RemoveAttachments { get; set; }
         public bool RemoveForcedFlags { get; set; }
         public bool RemoveFileTitle { get; set; }
-        public string DefaultTrackLanguageCode { get; set; } = "";
+        public bool RemoveUnlistedLanguageTracks { get; set; }
+        public string DefaultAudioTrackLanguageCode { get; set; } = "";
+        public string DefaultSubtitleTrackLanguageCode { get; set; } = "";
         public string OutputFolder { get; set; } = "";
-        public List<string> AudioLanguageOrder { get; set; } = new();
-        public List<string> SubtitleLanguageOrder { get; set; } = new();
-
-        public string MkvMergePath { get; set; } = "mkvmerge";
-        public string FfprobePath { get; set; } = "ffprobe";
-
-        public string RunMkvMergeJson(string filePath)
-        {
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = MkvMergePath,
-                Arguments = $"-J \"{filePath}\"",
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using var process = Process.Start(startInfo)!;
-            using var reader = process.StandardOutput;
-            string output = reader.ReadToEnd();
-            process.WaitForExit();
-
-            return output;
-        }
-
-        public string RunFfprobeJson(string filePath)
-        {
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = FfprobePath,
-                Arguments = $"-v quiet -print_format json -show_streams -select_streams a \"{filePath}\"",
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using var process = Process.Start(startInfo)!;
-            using var reader = process.StandardOutput;
-            string output = reader.ReadToEnd();
-            process.WaitForExit();
-
-            return output;
-        }
-
-        public AudioTrackInfo? GetAudioInfo(string filePath)
-        {
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = "mediainfo",
-                Arguments = $"--Output=JSON \"{filePath}\"",
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-
-            using var process = Process.Start(startInfo);
-            string output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit();
-
-            if (string.IsNullOrWhiteSpace(output)) 
-                return null;
-
-            using JsonDocument doc = JsonDocument.Parse(output);
-
-            var audioTrack = doc.RootElement
-                .GetProperty("media")
-                .GetProperty("track")
-                .EnumerateArray()
-                .FirstOrDefault(t => t.GetProperty("@type").GetString() == "Audio");
-
-            if (audioTrack.ValueKind == JsonValueKind.Undefined)
-                return null;
-
-            int bitRate = 0;
-            int channels = 0;
-
-            if (audioTrack.TryGetProperty("BitRate", out var brProp))
-            {
-                if (brProp.ValueKind == JsonValueKind.String && int.TryParse(brProp.GetString(), out int br))
-                    bitRate = br;
-                else if (brProp.ValueKind == JsonValueKind.Number)
-                    bitRate = brProp.GetInt32();
-            }
-
-            if (audioTrack.TryGetProperty("Channels", out var chProp))
-            {
-                if (chProp.ValueKind == JsonValueKind.String && int.TryParse(chProp.GetString(), out int ch))
-                    channels = ch;
-                else if (chProp.ValueKind == JsonValueKind.Number)
-                    channels = chProp.GetInt32();
-            }
-
-            return new AudioTrackInfo
-            {
-                BitRate = bitRate,
-                Channels = channels
-            };
-        }
+        public List<string> AudioLanguageOrder { get; set; } = [];
+        public List<string> SubtitleLanguageOrder { get; set; } = [];
 
         public (string arguments, string outputFilePath) BuildMkvMergeArgs(MkvFileInfo fileInfo)
         {
-            var audioTracks = new List<AudioTrackInfo>();
-            var subtitleTracks = new List<SubtitleTrackInfo>();
-            
-            string mkvJson = RunMkvMergeJson(fileInfo.FileName);
-            using var mkvDoc = JsonDocument.Parse(mkvJson);
-            var tracks = mkvDoc.RootElement.GetProperty("tracks");
+            fileInfo.AudioTracks.AddRange(fileInfo.ExternalAudioTracks);
 
-            string ffJson = RunFfprobeJson(fileInfo.FileName);
-            using var ffDoc = JsonDocument.Parse(ffJson);
-            var bitrateMap = new Dictionary<int, int>();
+            // Filter out tracks not in language order lists if option is enabled
+            var audioTracksToProcess = fileInfo.AudioTracks;
+            var subtitleTracksToProcess = fileInfo.SubtitleTracks;
 
-            foreach (var stream in ffDoc.RootElement.GetProperty("streams").EnumerateArray())
+            if (RemoveUnlistedLanguageTracks)
             {
-                if (stream.GetProperty("codec_type").GetString() != "audio")
+                // Only keep audio tracks that are in the AudioLanguageOrder list
+                if (AudioLanguageOrder.Count > 0)
                 {
-                    continue;
+                    audioTracksToProcess = audioTracksToProcess
+                        .Where(t => AudioLanguageOrder.Any(lang => lang.Equals(t.Language, StringComparison.OrdinalIgnoreCase)))
+                        .ToList();
                 }
 
-                var idx = stream.GetProperty("index").GetInt32();
-                
-                if (stream.TryGetProperty("bit_rate", out var brProp))
+                // Only keep subtitle tracks that are in the SubtitleLanguageOrder list
+                if (SubtitleLanguageOrder.Count > 0)
                 {
-                    if (brProp.ValueKind == JsonValueKind.Number && brProp.TryGetInt32(out int br))
-                    { 
-                        bitrateMap[idx] = br;
-                    }
-                    else if (brProp.ValueKind == JsonValueKind.String && int.TryParse(brProp.GetString(), out br))
-                    { 
-                        bitrateMap[idx] = br;
-                    }
+                    subtitleTracksToProcess = subtitleTracksToProcess
+                        .Where(t => SubtitleLanguageOrder.Any(lang => lang.Equals(t.Language, StringComparison.OrdinalIgnoreCase)))
+                        .ToList();
                 }
-            }
-
-            // Process audio tracks
-            foreach (var t in tracks.EnumerateArray().Where(t => t.GetProperty("type").GetString() == "audio"))
-            {
-                int id = t.GetProperty("id").GetInt32();
-                var props = t.GetProperty("properties");
-                string lang = props.TryGetProperty("language", out var lp) ? lp.GetString() ?? "und" : "und";
-                string codecId = props.TryGetProperty("codec_id", out var cd) ? cd.GetString() ?? "" : "";
-                int channels = props.TryGetProperty("audio_channels", out var ch) && ch.TryGetInt32(out var c) ? c : 0;
-                int bitRate = bitrateMap.TryGetValue(id, out var br2) ? br2 : 0;
-                bool isForced = props.TryGetProperty("forced_track", out var forced) &&
-                              (forced.ValueKind == JsonValueKind.True || 
-                               (forced.ValueKind == JsonValueKind.Number && forced.GetInt32() == 1));
-
-                audioTracks.Add(new AudioTrackInfo
-                {
-                    FileId = 0,
-                    TrackId = id,
-                    Language = lang,
-                    CodecId = codecId,
-                    Channels = channels,
-                    BitRate = bitRate,
-                    IsForced = isForced,
-                    FileName = fileInfo.FileName
-                });
-            }
-
-            // Process subtitle tracks
-            foreach (var t in tracks.EnumerateArray().Where(t => t.GetProperty("type").GetString() == "subtitles"))
-            {
-                int id = t.GetProperty("id").GetInt32();
-                var props = t.GetProperty("properties");
-                string lang = props.TryGetProperty("language", out var lp) ? lp.GetString() ?? "und" : "und";
-                bool isForced = props.TryGetProperty("forced_track", out var forced) &&
-                              (forced.ValueKind == JsonValueKind.True || 
-                               (forced.ValueKind == JsonValueKind.Number && forced.GetInt32() == 1));
-
-                subtitleTracks.Add(new SubtitleTrackInfo
-                {
-                    FileId = 0,
-                    TrackId = id,
-                    Language = lang,
-                    IsForced = isForced,
-                    FileName = fileInfo.FileName
-                });
-            }
-
-            int externalFileIndex = 1;
-            foreach (var externalAudioFile in fileInfo.ExternalAudioFiles)
-            {
-                string ext = Path.GetExtension(externalAudioFile.FileName).ToLowerInvariant();
-                string lang = !string.IsNullOrEmpty(externalAudioFile.LanguageCode) ? externalAudioFile.LanguageCode : "und";
-
-                if (ext == ".mka")
-                {
-                    string extJson = RunMkvMergeJson(externalAudioFile.FileName);
-                    using var extDoc = JsonDocument.Parse(extJson);
-                    var extTracks = extDoc.RootElement.GetProperty("tracks")
-                        .EnumerateArray()
-                        .Where(t => t.GetProperty("type").GetString() == "audio");
-
-                    var mediaInfo = GetAudioInfo(externalAudioFile.FileName);
-
-                    foreach (var extTrack in extTracks)
-                    {
-                        int trackId = extTrack.GetProperty("id").GetInt32();
-                        var props = extTrack.GetProperty("properties");
-                        string codecId = props.TryGetProperty("codec_id", out var cd) ? cd.GetString() ?? "" : "";
-                        int channels = props.TryGetProperty("audio_channels", out var ch) && ch.TryGetInt32(out var c) ? c : 0;
-                        int bitRate = mediaInfo?.BitRate ?? 0;
-
-                        audioTracks.Add(new AudioTrackInfo
-                        {
-                            FileId = externalFileIndex,
-                            TrackId = trackId,
-                            Language = lang,
-                            CodecId = codecId,
-                            Channels = channels,
-                            BitRate = bitRate,
-                            IsForced = false, // External audio files typically don't have forced flags
-                            FileName = externalAudioFile.FileName
-                        });
-                    }
-                }
-                else
-                {
-                    var mediaInfo = GetAudioInfo(externalAudioFile.FileName);
-                    audioTracks.Add(new AudioTrackInfo
-                    {
-                        FileId = externalFileIndex,
-                        TrackId = 0,
-                        Language = lang,
-                        Channels = mediaInfo?.Channels ?? 0,
-                        BitRate = mediaInfo?.BitRate ?? 0,
-                        IsForced = false, // External audio files typically don't have forced flags
-                        FileName = externalAudioFile.FileName
-                    });
-                }
-                externalFileIndex++;
             }
 
             // Sort audio and subtitle tracks by language preference
             int AudioLangPriority(string lang) => AudioLanguageOrder.IndexOf(lang) is var i && i >= 0 ? i : int.MaxValue;
             int SubtitleLangPriority(string lang) => SubtitleLanguageOrder.IndexOf(lang) is var i && i >= 0 ? i : int.MaxValue;
-            
-            var sortedAudio = audioTracks.OrderBy(t => AudioLangPriority(t.Language)).ThenBy(t => t.FileId).ThenBy(t => t.TrackId).ToList();
-            var sortedSubtitles = subtitleTracks.OrderBy(t => SubtitleLangPriority(t.Language)).ThenBy(t => t.TrackId).ToList();
+
+            var sortedAudio = audioTracksToProcess.OrderBy(t => AudioLangPriority(t.Language)).ThenBy(t => t.FileId).ThenBy(t => t.TrackId).ToList();
+            var sortedSubtitles = subtitleTracksToProcess.OrderBy(t => SubtitleLangPriority(t.Language)).ThenBy(t => t.TrackId).ToList();
 
             List<string> args = [];
             List<string> trackOrder = [];
 
             // Global options first
             var baseDir = Path.GetDirectoryName(fileInfo.FileName);
-            var fileName = Path.GetFileName(fileInfo.FileName);
+            var fileName = Path.GetFileNameWithoutExtension(fileInfo.FileName) + ".mkv";
 
             var safeOutputFolder = OutputFolder.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
@@ -267,7 +61,7 @@ namespace RemuxOpt
                 : Path.Combine(OutputFolder, fileName);
 
             args.Add($"-o \"{outputFile}\"");
-    
+
             if (RemoveFileTitle)
             {
                 args.Add("--title \"\"");
@@ -283,60 +77,74 @@ namespace RemuxOpt
                 var track = sortedAudio[i];
                 trackOrder.Add($"{track.FileId}:{track.TrackId}");
             }
-            
+
             for (int i = 0; i < sortedSubtitles.Count; i++)
             {
                 var track = sortedSubtitles[i];
                 trackOrder.Add($"{track.FileId}:{track.TrackId}");
             }
 
-            // Determine which track should be default
-            AudioTrackInfo defaultTrack = null;
-            if (!string.IsNullOrWhiteSpace(DefaultTrackLanguageCode))
+            // Determine which audio track should be default
+            AudioTrackInfo defaultAudioTrack = null;
+            if (!string.IsNullOrWhiteSpace(DefaultAudioTrackLanguageCode))
             {
-                // Find first track matching the DefaultTrack language
-                defaultTrack = sortedAudio.FirstOrDefault(t => t.Language.Equals(DefaultTrackLanguageCode, StringComparison.OrdinalIgnoreCase));
+                // Find first track matching the DefaultAudioTrack language
+                defaultAudioTrack = sortedAudio.FirstOrDefault(t => t.Language.Equals(DefaultAudioTrackLanguageCode, StringComparison.OrdinalIgnoreCase));
             }
-            // Fallback to first track in sorted order if DefaultTrack not found or not specified
-            defaultTrack ??= sortedAudio.FirstOrDefault();
+            else if (AudioLanguageOrder.Count > 0)
+            {
+                // Use first language in AudioLanguageOrder as default
+                var firstLanguage = AudioLanguageOrder[0];
+                defaultAudioTrack = sortedAudio.FirstOrDefault(t => t.Language.Equals(firstLanguage, StringComparison.OrdinalIgnoreCase));
+            }
+            // Fallback to first track in sorted order if nothing found
+            defaultAudioTrack ??= sortedAudio.FirstOrDefault();
+
+            // Determine which subtitle track should be default
+            SubtitleTrackInfo defaultSubtitleTrack = null;
+            if (!string.IsNullOrWhiteSpace(DefaultSubtitleTrackLanguageCode))
+            {
+                // Find first track matching the DefaultSubtitleTrack language
+                defaultSubtitleTrack = sortedSubtitles.FirstOrDefault(t => t.Language.Equals(DefaultSubtitleTrackLanguageCode, StringComparison.OrdinalIgnoreCase));
+            }
+            // Note: If DefaultSubtitleTrackLanguageCode is not specified, no subtitle track will be default
 
             // Process main MKV file
             var mainFileAudioTracks = sortedAudio.Where(t => t.FileId == 0).ToList();
             var mainFileSubtitleTracks = sortedSubtitles.Where(t => t.FileId == 0).ToList();
-            var allMainTracks = tracks.EnumerateArray().ToList();
-    
+
             // Determine which audio tracks to keep from main file
             var audioTracksToKeep = mainFileAudioTracks.Select(t => t.TrackId).ToList();
-            var allAudioTrackIds = allMainTracks
-                .Where(t => t.GetProperty("type").GetString() == "audio")
-                .Select(t => t.GetProperty("id").GetInt32())
-                .ToList();
+            var allAudioTrackIds = fileInfo.AudioTracks.Where(t => t.FileId == 0).Select(t => t.TrackId).ToList();
 
             // Determine which subtitle tracks to keep from main file
             var subtitleTracksToKeep = mainFileSubtitleTracks.Select(t => t.TrackId).ToList();
-            var allSubtitleTrackIds = allMainTracks
-                .Where(t => t.GetProperty("type").GetString() == "subtitles")
-                .Select(t => t.GetProperty("id").GetInt32())
-                .ToList();
+            var allSubtitleTrackIds = fileInfo.SubtitleTracks.Where(t => t.FileId == 0).Select(t => t.TrackId).ToList();
 
             // Only include audio tracks we want
             if (audioTracksToKeep.Count < allAudioTrackIds.Count)
+            {
                 args.Add($"-a {string.Join(',', audioTracksToKeep)}");
+            }
 
-            // Only include subtitle tracks we want
-            if (subtitleTracksToKeep.Count > 0 && subtitleTracksToKeep.Count < allSubtitleTrackIds.Count)
+            // Always specify which subtitle tracks to include (even if it's all of them)
+            if (subtitleTracksToKeep.Count > 0)
+            {
                 args.Add($"-s {string.Join(',', subtitleTracksToKeep)}");
-            else if (subtitleTracksToKeep.Count == 0)
+            }
+            else
+            {
                 args.Add("-S"); // No subtitles
+            }
 
             // Add track-specific options for main file audio tracks
             foreach (var track in mainFileAudioTracks)
             {
-                bool isDefault = defaultTrack != null && track.FileId == defaultTrack.FileId && track.TrackId == defaultTrack.TrackId;
-        
+                bool isDefault = defaultAudioTrack != null && track.FileId == defaultAudioTrack.FileId && track.TrackId == defaultAudioTrack.TrackId;
+
                 args.Add($"--language {track.TrackId}:{track.Language}");
                 args.Add($"--default-track-flag {track.TrackId}:{(isDefault ? "yes" : "no")}");
-                
+
                 if (RemoveForcedFlags && track.IsForced)
                 {
                     args.Add($"--forced-track {track.TrackId}:no");
@@ -357,9 +165,12 @@ namespace RemuxOpt
             // Add track-specific options for main file subtitle tracks
             foreach (var track in mainFileSubtitleTracks)
             {
+                bool isDefault = defaultSubtitleTrack != null && track.FileId == defaultSubtitleTrack.FileId && track.TrackId == defaultSubtitleTrack.TrackId;
+
                 args.Add($"--language {track.TrackId}:{track.Language}");
+                args.Add($"--default-track-flag {track.TrackId}:{(isDefault ? "yes" : "no")}");
                 args.Add($"--sub-charset {track.TrackId}:UTF-8");
-                
+
                 if (RemoveForcedFlags && track.IsForced)
                 {
                     args.Add($"--forced-track {track.TrackId}:no");
@@ -371,18 +182,18 @@ namespace RemuxOpt
 
             // Process external files
             int currentFileIndex = 1;
-            foreach (var externalAudioFile in fileInfo.ExternalAudioFiles)
+            foreach (var externalAudioFile in fileInfo.ExternalAudioTracks)
             {
                 var externalTracks = sortedAudio.Where(t => t.FileId == currentFileIndex).ToList();
-        
+
                 // Add track-specific options for this external file
                 foreach (var track in externalTracks)
                 {
-                    bool isDefault = defaultTrack != null && track.FileId == defaultTrack.FileId && track.TrackId == defaultTrack.TrackId;
-            
+                    bool isDefault = defaultAudioTrack != null && track.FileId == defaultAudioTrack.FileId && track.TrackId == defaultAudioTrack.TrackId;
+
                     args.Add($"--language {track.TrackId}:{track.Language}");
                     args.Add($"--default-track-flag {track.TrackId}:{(isDefault ? "yes" : "no")}");
-                    
+
                     if (RemoveForcedFlags && track.IsForced)
                     {
                         args.Add($"--forced-track {track.TrackId}:no");
@@ -409,7 +220,6 @@ namespace RemuxOpt
             if (trackOrder.Count > 0)
                 args.Add($"--track-order {string.Join(',', trackOrder)}");
 
-            //return new KeyValuePair<string, string>(string.Join(' ', args), outputFile);
             return (string.Join(' ', args), outputFile);
         }
 
