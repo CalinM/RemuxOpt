@@ -69,7 +69,7 @@ namespace RemuxOpt
                 var id = t.GetProperty("id").GetInt32();
                 var props = t.GetProperty("properties");
                 string lang = props.TryGetProperty("language", out var lp) ? lp.GetString() ?? "und" : "und";
-                string codecId = props.TryGetProperty("codec_id", out var cd) ? cd.GetString() ?? "" : "";
+                string codecId = GetCodecIdOrFallback(t);
                 int channels = props.TryGetProperty("audio_channels", out var ch) && ch.TryGetInt32(out var c) ? c : 0;
                 int bitRate = bitrateMap.TryGetValue(id, out var br2) ? br2 : 0;
                 bool isForced = props.TryGetProperty("forced_track", out var forced) &&
@@ -131,6 +131,28 @@ namespace RemuxOpt
             }
 
             return result;
+        }
+
+        public static string GetCodecIdOrFallback(JsonElement trackElement, string defaultValue = "unknown")
+        {
+            // First, check inside "properties" for "codec_id"
+            if (trackElement.TryGetProperty("properties", out var props))
+            {
+                if (props.TryGetProperty("codec_id", out var codecIdProp) &&
+                    !string.IsNullOrWhiteSpace(codecIdProp.GetString()))
+                {
+                    return codecIdProp.GetString()!;
+                }
+            }
+
+            // Fallback to top-level "codec"
+            if (trackElement.TryGetProperty("codec", out var codecProp) &&
+                !string.IsNullOrWhiteSpace(codecProp.GetString()))
+            {
+                return codecProp.GetString()!;
+            }
+
+            return defaultValue;
         }
 
         private string RunMkvMergeJson(string filePath)

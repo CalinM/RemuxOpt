@@ -1,27 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-
-namespace RemuxOpt
+﻿namespace RemuxOpt
 {
     public partial class ucLanguageSelector : UserControl
     {
+        public event EventHandler? EnterPressed;
+
         public LanguageObject? SelectedLanguage
         {
             get
             {
-                if (cbLanguages.SelectedItem is LanguageObject selectedLanguage)
-                {
-                    return selectedLanguage;
-                }
-
-                return null;
+                return cbLanguages.SelectedItem as LanguageObject;
             }
         }
 
@@ -33,16 +20,14 @@ namespace RemuxOpt
         public ucLanguageSelector(List<string> selectedCodes)
         {
             InitializeComponent();
-
             PopulateComboBox(selectedCodes);
+            ConfigureComboBox();
 
-            cbLanguages.AutoCompleteSource = AutoCompleteSource.ListItems;
-
-            cbLanguages.TextChanged += CbLanguages_TextChanged;
-            cbLanguages.KeyPress += CbLanguages_KeyPress;
-            cbLanguages.MouseClick += CbLanguages_MouseClick;
+            HandleCreated += (s, e) =>
+            {
+                BeginInvoke(new Action(() => cbLanguages.Focus()));
+            };
         }
-      
 
         private void PopulateComboBox(List<string> providedCodes)
         {
@@ -57,28 +42,22 @@ namespace RemuxOpt
             cbLanguages.SelectedIndex = -1; // No selection by default
         }
 
-
-        private void CbLanguages_MouseClick(object? sender, MouseEventArgs e)
+        private void ConfigureComboBox()
         {
-            cbLanguages.DroppedDown = true;
+            cbLanguages.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+            cbLanguages.AutoCompleteSource = AutoCompleteSource.ListItems;
+
+            cbLanguages.KeyDown += CbLanguages_KeyDown;
         }
 
-        private void CbLanguages_TextChanged(object? sender, EventArgs e)
+        private void CbLanguages_KeyDown(object? sender, KeyEventArgs e)
         {
-            string typedText = cbLanguages.Text;
-
-            var match = cbLanguages.Items.Cast<LanguageObject>()
-                .FirstOrDefault(lang => lang.Name.Equals(typedText, StringComparison.OrdinalIgnoreCase));
-
-            if (match != null)
+            if (e.KeyCode == Keys.Enter)
             {
-                cbLanguages.SelectedItem = match; // Select the matching object
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                EnterPressed?.Invoke(this, EventArgs.Empty);
             }
-        }
-
-        private void CbLanguages_KeyPress(object sender, KeyPressEventArgs e)
-        {
-            cbLanguages.DroppedDown = true;
         }
     }
 }

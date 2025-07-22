@@ -52,11 +52,15 @@ namespace RemuxOpt
                 ? XDocument.Load("config.xml")
                 : new XDocument(new XElement("Configuration"));
 
+            Rectangle bounds = form.WindowState == FormWindowState.Normal
+                ? form.Bounds
+                : form.RestoreBounds;
+
             var formSettings = new XElement("FormSettings",
-                new XAttribute("Width", form.Width),
-                new XAttribute("Height", form.Height),
-                new XAttribute("Left", form.Left),
-                new XAttribute("Top", form.Top),
+                new XAttribute("Width", bounds.Width),
+                new XAttribute("Height", bounds.Height),
+                new XAttribute("Left", bounds.Left),
+                new XAttribute("Top", bounds.Top),
                 new XAttribute("WindowState", form.WindowState.ToString())
             );
 

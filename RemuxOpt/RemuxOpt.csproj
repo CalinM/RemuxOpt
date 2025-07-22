@@ -8,22 +8,27 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <!-- Version that the workflow will read -->
-    <Version>1.0.0.147</Version>
+    <Version>1.0.0.191</Version>
     <!-- Optional: Additional version-related properties -->
-    <AssemblyVersion>1.0.0.147</AssemblyVersion>
-    <FileVersion>1.0.0.147</FileVersion>
+    <AssemblyVersion>1.0.0.191</AssemblyVersion>
+    <FileVersion>1.0.0.191</FileVersion>
     <!-- Optional: Application metadata -->
     <AssemblyTitle>RemuxOpt</AssemblyTitle>
     <AssemblyDescription>Rutomatic remuxer</AssemblyDescription>
     <AssemblyCompany>CalinM</AssemblyCompany>
     <AssemblyProduct>RemuxOpt</AssemblyProduct>
     <Copyright>Copyright © CalinM 2025</Copyright>
+    <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <ShouldCreateLogs>True</ShouldCreateLogs>
     <AdvancedSettingsExpanded>True</AdvancedSettingsExpanded>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="app.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="WindowsAPICodePack-Shell" Version="1.1.1" />

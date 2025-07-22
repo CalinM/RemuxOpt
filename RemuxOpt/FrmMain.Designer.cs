@@ -30,7 +30,12 @@
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(FrmMain));
             pParameters = new Panel();
-            bOptions = new Button();
+            gbOptions = new GroupBox();
+            pOptionsScrollableWrapper = new Panel();
+            chkRemoveUnlistedLanguageTracks = new CheckBox();
+            chkApplyNamingConventions = new CheckBox();
+            chkDeleteOriginal = new CheckBox();
+            chkReadFilesRecursively = new CheckBox();
             btbOutputPath = new ButtonTextBox();
             lbOutputFolder = new Label();
             lbMediaInfoCliVersion = new Label();
@@ -64,6 +69,8 @@
             tpOutput = new TabPage();
             tbOutput = new TextBox();
             pParameters.SuspendLayout();
+            gbOptions.SuspendLayout();
+            pOptionsScrollableWrapper.SuspendLayout();
             pFiles.SuspendLayout();
             pProgress.SuspendLayout();
             tcGrid.SuspendLayout();
@@ -74,7 +81,7 @@
             // 
             // pParameters
             // 
-            pParameters.Controls.Add(bOptions);
+            pParameters.Controls.Add(gbOptions);
             pParameters.Controls.Add(btbOutputPath);
             pParameters.Controls.Add(lbOutputFolder);
             pParameters.Controls.Add(lbMediaInfoCliVersion);
@@ -98,22 +105,76 @@
             pParameters.Dock = DockStyle.Left;
             pParameters.Location = new Point(0, 0);
             pParameters.Name = "pParameters";
-            pParameters.Size = new Size(440, 777);
+            pParameters.Size = new Size(440, 806);
             pParameters.TabIndex = 0;
             // 
-            // bOptions
+            // gbOptions
             // 
-            bOptions.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            bOptions.Location = new Point(16, 691);
-            bOptions.Name = "bOptions";
-            bOptions.Size = new Size(95, 23);
-            bOptions.TabIndex = 52;
-            bOptions.Text = "Options";
-            bOptions.UseVisualStyleBackColor = true;
+            gbOptions.Controls.Add(pOptionsScrollableWrapper);
+            gbOptions.Location = new Point(12, 606);
+            gbOptions.Name = "gbOptions";
+            gbOptions.Size = new Size(414, 101);
+            gbOptions.TabIndex = 53;
+            gbOptions.TabStop = false;
+            gbOptions.Text = "Options";
+            // 
+            // pOptionsScrollableWrapper
+            // 
+            pOptionsScrollableWrapper.AutoScroll = true;
+            pOptionsScrollableWrapper.Controls.Add(chkRemoveUnlistedLanguageTracks);
+            pOptionsScrollableWrapper.Controls.Add(chkApplyNamingConventions);
+            pOptionsScrollableWrapper.Controls.Add(chkDeleteOriginal);
+            pOptionsScrollableWrapper.Controls.Add(chkReadFilesRecursively);
+            pOptionsScrollableWrapper.Dock = DockStyle.Fill;
+            pOptionsScrollableWrapper.Location = new Point(3, 19);
+            pOptionsScrollableWrapper.Margin = new Padding(0);
+            pOptionsScrollableWrapper.Name = "pOptionsScrollableWrapper";
+            pOptionsScrollableWrapper.Size = new Size(408, 79);
+            pOptionsScrollableWrapper.TabIndex = 0;
+            // 
+            // chkRemoveUnlistedLanguageTracks
+            // 
+            chkRemoveUnlistedLanguageTracks.AutoSize = true;
+            chkRemoveUnlistedLanguageTracks.Location = new Point(9, 40);
+            chkRemoveUnlistedLanguageTracks.Name = "chkRemoveUnlistedLanguageTracks";
+            chkRemoveUnlistedLanguageTracks.Size = new Size(324, 19);
+            chkRemoveUnlistedLanguageTracks.TabIndex = 15;
+            chkRemoveUnlistedLanguageTracks.Text = "Remove the tracks in languages that are NOT configured";
+            chkRemoveUnlistedLanguageTracks.UseVisualStyleBackColor = true;
+            // 
+            // chkApplyNamingConventions
+            // 
+            chkApplyNamingConventions.AutoSize = true;
+            chkApplyNamingConventions.Location = new Point(9, 58);
+            chkApplyNamingConventions.Name = "chkApplyNamingConventions";
+            chkApplyNamingConventions.Size = new Size(169, 19);
+            chkApplyNamingConventions.TabIndex = 14;
+            chkApplyNamingConventions.Text = "Apply naming conventions";
+            chkApplyNamingConventions.UseVisualStyleBackColor = true;
+            // 
+            // chkDeleteOriginal
+            // 
+            chkDeleteOriginal.AutoSize = true;
+            chkDeleteOriginal.Location = new Point(9, 22);
+            chkDeleteOriginal.Name = "chkDeleteOriginal";
+            chkDeleteOriginal.Size = new Size(290, 19);
+            chkDeleteOriginal.TabIndex = 13;
+            chkDeleteOriginal.Text = "Delete the original file if no errors are encountered";
+            chkDeleteOriginal.UseVisualStyleBackColor = true;
+            // 
+            // chkReadFilesRecursively
+            // 
+            chkReadFilesRecursively.AutoSize = true;
+            chkReadFilesRecursively.Location = new Point(9, 4);
+            chkReadFilesRecursively.Name = "chkReadFilesRecursively";
+            chkReadFilesRecursively.Size = new Size(237, 19);
+            chkReadFilesRecursively.TabIndex = 1;
+            chkReadFilesRecursively.Text = "Read files from all subfolders recursively";
+            chkReadFilesRecursively.UseVisualStyleBackColor = true;
             // 
             // btbOutputPath
             // 
-            btbOutputPath.Location = new Point(12, 575);
+            btbOutputPath.Location = new Point(12, 485);
             btbOutputPath.Name = "btbOutputPath";
             btbOutputPath.Size = new Size(414, 23);
             btbOutputPath.TabIndex = 51;
@@ -121,7 +182,7 @@
             // lbOutputFolder
             // 
             lbOutputFolder.AutoSize = true;
-            lbOutputFolder.Location = new Point(12, 557);
+            lbOutputFolder.Location = new Point(12, 467);
             lbOutputFolder.Name = "lbOutputFolder";
             lbOutputFolder.Size = new Size(82, 15);
             lbOutputFolder.TabIndex = 49;
@@ -131,7 +192,7 @@
             // 
             lbMediaInfoCliVersion.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             lbMediaInfoCliVersion.AutoEllipsis = true;
-            lbMediaInfoCliVersion.Location = new Point(12, 758);
+            lbMediaInfoCliVersion.Location = new Point(12, 787);
             lbMediaInfoCliVersion.Name = "lbMediaInfoCliVersion";
             lbMediaInfoCliVersion.Size = new Size(414, 15);
             lbMediaInfoCliVersion.TabIndex = 48;
@@ -142,7 +203,7 @@
             chkRemoveFileTitle.AutoSize = true;
             chkRemoveFileTitle.Checked = true;
             chkRemoveFileTitle.CheckState = CheckState.Checked;
-            chkRemoveFileTitle.Location = new Point(16, 657);
+            chkRemoveFileTitle.Location = new Point(16, 569);
             chkRemoveFileTitle.Name = "chkRemoveFileTitle";
             chkRemoveFileTitle.Size = new Size(172, 19);
             chkRemoveFileTitle.TabIndex = 47;
@@ -152,7 +213,7 @@
             // bRemux
             // 
             bRemux.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            bRemux.Location = new Point(331, 691);
+            bRemux.Location = new Point(331, 720);
             bRemux.Name = "bRemux";
             bRemux.Size = new Size(95, 23);
             bRemux.TabIndex = 46;
@@ -163,7 +224,7 @@
             // 
             lbFFprobeVersion.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             lbFFprobeVersion.AutoEllipsis = true;
-            lbFFprobeVersion.Location = new Point(12, 742);
+            lbFFprobeVersion.Location = new Point(12, 771);
             lbFFprobeVersion.Name = "lbFFprobeVersion";
             lbFFprobeVersion.Size = new Size(414, 15);
             lbFFprobeVersion.TabIndex = 45;
@@ -172,7 +233,7 @@
             // lbMkvVersion
             // 
             lbMkvVersion.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            lbMkvVersion.Location = new Point(12, 726);
+            lbMkvVersion.Location = new Point(12, 755);
             lbMkvVersion.Name = "lbMkvVersion";
             lbMkvVersion.Size = new Size(414, 15);
             lbMkvVersion.TabIndex = 44;
@@ -183,7 +244,7 @@
             chkRemoveAttachments.AutoSize = true;
             chkRemoveAttachments.Checked = true;
             chkRemoveAttachments.CheckState = CheckState.Checked;
-            chkRemoveAttachments.Location = new Point(16, 636);
+            chkRemoveAttachments.Location = new Point(16, 548);
             chkRemoveAttachments.Name = "chkRemoveAttachments";
             chkRemoveAttachments.Size = new Size(138, 19);
             chkRemoveAttachments.TabIndex = 43;
@@ -195,7 +256,7 @@
             chkRemoveForced.AutoSize = true;
             chkRemoveForced.Checked = true;
             chkRemoveForced.CheckState = CheckState.Checked;
-            chkRemoveForced.Location = new Point(16, 615);
+            chkRemoveForced.Location = new Point(16, 527);
             chkRemoveForced.Name = "chkRemoveForced";
             chkRemoveForced.Size = new Size(232, 19);
             chkRemoveForced.TabIndex = 42;
@@ -205,7 +266,7 @@
             // chkAutoTitleForAudioTrack
             // 
             chkAutoTitleForAudioTrack.AutoSize = true;
-            chkAutoTitleForAudioTrack.Location = new Point(349, 278);
+            chkAutoTitleForAudioTrack.Location = new Point(349, 237);
             chkAutoTitleForAudioTrack.Name = "chkAutoTitleForAudioTrack";
             chkAutoTitleForAudioTrack.Size = new Size(77, 19);
             chkAutoTitleForAudioTrack.TabIndex = 41;
@@ -217,7 +278,7 @@
             chkPreserveSubtitlesTrackTitles.AutoSize = true;
             chkPreserveSubtitlesTrackTitles.Checked = true;
             chkPreserveSubtitlesTrackTitles.CheckState = CheckState.Checked;
-            chkPreserveSubtitlesTrackTitles.Location = new Point(328, 514);
+            chkPreserveSubtitlesTrackTitles.Location = new Point(328, 428);
             chkPreserveSubtitlesTrackTitles.Name = "chkPreserveSubtitlesTrackTitles";
             chkPreserveSubtitlesTrackTitles.Size = new Size(98, 19);
             chkPreserveSubtitlesTrackTitles.TabIndex = 40;
@@ -227,7 +288,7 @@
             // btnAddSubtitleLanguage
             // 
             btnAddSubtitleLanguage.AutoSize = true;
-            btnAddSubtitleLanguage.Location = new Point(12, 514);
+            btnAddSubtitleLanguage.Location = new Point(12, 428);
             btnAddSubtitleLanguage.Name = "btnAddSubtitleLanguage";
             btnAddSubtitleLanguage.Size = new Size(93, 15);
             btnAddSubtitleLanguage.TabIndex = 39;
@@ -236,9 +297,9 @@
             // 
             // lvSubtitleTracks
             // 
-            lvSubtitleTracks.Location = new Point(12, 334);
+            lvSubtitleTracks.Location = new Point(12, 290);
             lvSubtitleTracks.Name = "lvSubtitleTracks";
-            lvSubtitleTracks.Size = new Size(415, 175);
+            lvSubtitleTracks.Size = new Size(415, 135);
             lvSubtitleTracks.TabIndex = 38;
             lvSubtitleTracks.UseCompatibleStateImageBehavior = false;
             lvSubtitleTracks.View = View.Details;
@@ -246,7 +307,7 @@
             // lbSubtitleTracks
             // 
             lbSubtitleTracks.AutoSize = true;
-            lbSubtitleTracks.Location = new Point(12, 316);
+            lbSubtitleTracks.Location = new Point(12, 272);
             lbSubtitleTracks.Name = "lbSubtitleTracks";
             lbSubtitleTracks.Size = new Size(243, 15);
             lbSubtitleTracks.TabIndex = 37;
@@ -255,7 +316,7 @@
             // lbAddAudioLanguage
             // 
             lbAddAudioLanguage.AutoSize = true;
-            lbAddAudioLanguage.Location = new Point(12, 279);
+            lbAddAudioLanguage.Location = new Point(12, 238);
             lbAddAudioLanguage.Name = "lbAddAudioLanguage";
             lbAddAudioLanguage.Size = new Size(93, 15);
             lbAddAudioLanguage.TabIndex = 36;
@@ -266,7 +327,7 @@
             // 
             lvAudioTracks.Location = new Point(12, 99);
             lvAudioTracks.Name = "lvAudioTracks";
-            lvAudioTracks.Size = new Size(415, 175);
+            lvAudioTracks.Size = new Size(415, 135);
             lvAudioTracks.TabIndex = 35;
             lvAudioTracks.UseCompatibleStateImageBehavior = false;
             lvAudioTracks.View = View.Details;
@@ -314,7 +375,7 @@
             pFiles.Dock = DockStyle.Fill;
             pFiles.Location = new Point(440, 0);
             pFiles.Name = "pFiles";
-            pFiles.Size = new Size(844, 777);
+            pFiles.Size = new Size(844, 806);
             pFiles.TabIndex = 1;
             // 
             // pProgress
@@ -323,7 +384,7 @@
             pProgress.Controls.Add(progressLabel);
             pProgress.Controls.Add(progressBar);
             pProgress.Dock = DockStyle.Bottom;
-            pProgress.Location = new Point(0, 687);
+            pProgress.Location = new Point(0, 716);
             pProgress.Name = "pProgress";
             pProgress.Size = new Size(844, 90);
             pProgress.TabIndex = 5;
@@ -365,7 +426,7 @@
             tcGrid.Location = new Point(0, 0);
             tcGrid.Name = "tcGrid";
             tcGrid.SelectedIndex = 0;
-            tcGrid.Size = new Size(844, 777);
+            tcGrid.Size = new Size(844, 806);
             tcGrid.TabIndex = 4;
             // 
             // tpGrid
@@ -374,7 +435,7 @@
             tpGrid.Location = new Point(4, 24);
             tpGrid.Name = "tpGrid";
             tpGrid.Padding = new Padding(3);
-            tpGrid.Size = new Size(836, 749);
+            tpGrid.Size = new Size(836, 778);
             tpGrid.TabIndex = 0;
             tpGrid.Text = "Table-view";
             tpGrid.UseVisualStyleBackColor = true;
@@ -385,7 +446,7 @@
             lbDragFolderHere.Dock = DockStyle.Fill;
             lbDragFolderHere.Location = new Point(3, 3);
             lbDragFolderHere.Name = "lbDragFolderHere";
-            lbDragFolderHere.Size = new Size(830, 743);
+            lbDragFolderHere.Size = new Size(830, 772);
             lbDragFolderHere.TabIndex = 3;
             lbDragFolderHere.Text = "Drag a folder (or files) here ...";
             lbDragFolderHere.TextAlign = ContentAlignment.MiddleCenter;
@@ -396,7 +457,7 @@
             tpTextView.Location = new Point(4, 24);
             tpTextView.Name = "tpTextView";
             tpTextView.Padding = new Padding(3);
-            tpTextView.Size = new Size(836, 749);
+            tpTextView.Size = new Size(836, 778);
             tpTextView.TabIndex = 1;
             tpTextView.Text = "Text-view";
             tpTextView.UseVisualStyleBackColor = true;
@@ -410,7 +471,7 @@
             txtFilesDetails.Name = "txtFilesDetails";
             txtFilesDetails.ReadOnly = true;
             txtFilesDetails.ScrollBars = ScrollBars.Vertical;
-            txtFilesDetails.Size = new Size(830, 743);
+            txtFilesDetails.Size = new Size(830, 772);
             txtFilesDetails.TabIndex = 1;
             // 
             // tpOutput
@@ -419,7 +480,7 @@
             tpOutput.Location = new Point(4, 24);
             tpOutput.Name = "tpOutput";
             tpOutput.Padding = new Padding(3);
-            tpOutput.Size = new Size(836, 749);
+            tpOutput.Size = new Size(836, 778);
             tpOutput.TabIndex = 2;
             tpOutput.Text = "Output";
             tpOutput.UseVisualStyleBackColor = true;
@@ -434,23 +495,26 @@
             tbOutput.Name = "tbOutput";
             tbOutput.ReadOnly = true;
             tbOutput.ScrollBars = ScrollBars.Vertical;
-            tbOutput.Size = new Size(830, 743);
+            tbOutput.Size = new Size(830, 772);
             tbOutput.TabIndex = 2;
             // 
             // FrmMain
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(1284, 777);
+            ClientSize = new Size(1284, 806);
             Controls.Add(pFiles);
             Controls.Add(pParameters);
             Icon = (Icon)resources.GetObject("$this.Icon");
-            MinimumSize = new Size(1300, 800);
+            MinimumSize = new Size(1300, 845);
             Name = "FrmMain";
             Text = "RemuxOpt";
             FormClosing += FrmMain_FormClosing;
             pParameters.ResumeLayout(false);
             pParameters.PerformLayout();
+            gbOptions.ResumeLayout(false);
+            pOptionsScrollableWrapper.ResumeLayout(false);
+            pOptionsScrollableWrapper.PerformLayout();
             pFiles.ResumeLayout(false);
             pProgress.ResumeLayout(false);
             pProgress.PerformLayout();
@@ -498,6 +562,11 @@
         private Label lbMediaInfoCliVersion;
         private Label lbOutputFolder;
         private ButtonTextBox btbOutputPath;
-        private Button bOptions;
+        private GroupBox gbOptions;
+        private Panel pOptionsScrollableWrapper;
+        private CheckBox chkReadFilesRecursively;
+        private CheckBox chkRemoveUnlistedLanguageTracks;
+        private CheckBox chkApplyNamingConventions;
+        private CheckBox chkDeleteOriginal;
     }
 }

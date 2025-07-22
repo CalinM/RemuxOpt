@@ -14,6 +14,8 @@
                 Location = new Point(12, 58)
             };
 
+            _ucLanguageSelector.EnterPressed += (s, e) => btnOk.PerformClick();
+
             Controls.Add(_ucLanguageSelector);
 
             lbInfo.Text = infoText;

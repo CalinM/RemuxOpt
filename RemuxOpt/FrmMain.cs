@@ -1,9 +1,6 @@
 ﻿using Microsoft.WindowsAPICodePack.Dialogs;
-using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.IO;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -22,7 +19,8 @@ namespace RemuxOpt
         private string? _clickedColumnNameForContext = null;
         private Label _dragTooltipLabel;
 
-        private AppOptions _appOptions = new AppOptions();
+        private AppOptions _appOptions = new();
+
         public FrmMain()
         {
             InitializeComponent();
@@ -37,6 +35,7 @@ namespace RemuxOpt
             InitGrid();
             InitTooltips();
             InitListViews();
+            InitOptions();
 
             chkEmptyVideoTitle.CheckedChanged += CbEmptyVideoTitle_CheckedChanged;
             chkEmptyVideoTitle.Checked = true; // Default to empty video title
@@ -56,14 +55,14 @@ namespace RemuxOpt
 
                 // Check if Ctrl key was pressed during drop
                 bool ctrlPressed = (e.KeyState & 8) == 8;
-    
+
                 if (!ctrlPressed)
                 {
                     ClearPreviousFilesDetails();
                 }
-                
+
                 tcGrid.SelectTab(tpGrid);
-                
+
                 var paths = (string[])e.Data.GetData(DataFormats.FileDrop);
 
                 var droppedFiles = paths.SelectMany(path =>
@@ -170,18 +169,6 @@ namespace RemuxOpt
 
                 _backgroundWorker.RunWorkerAsync(context);
             };
-
-            bOptions.Click += (s, e) =>
-            {
-                using (var optionsForm = new FrmOptions(_appOptions))
-                {
-                    if (optionsForm.ShowDialog(this) == DialogResult.OK)
-                    {
-                        _appOptions.SaveOptions();
-                        btbOutputPath.Enabled = !_appOptions.ReadFilesRecursively;
-                    }
-                }
-            };
         }
 
         private void InitializeDragTooltip()
@@ -206,13 +193,13 @@ namespace RemuxOpt
             {
                 bool ctrlPressed = (e.KeyState & 8) == 8; // 8 is the flag for Ctrl key
                 e.Effect = ctrlPressed ? DragDropEffects.Link : DragDropEffects.Copy;
-        
+
                 // Show tooltip when Ctrl is pressed
                 if (ctrlPressed && _dataGridViewResults.Rows.Count > 0)
                 {
                     var screenPos = new Point(e.X, e.Y);
                     var clientPos = this.PointToClient(screenPos);
-            
+
                     _dragTooltipLabel.Location = new Point(clientPos.X + 10, clientPos.Y - 25);
                     _dragTooltipLabel.Visible = true;
                 }
@@ -273,7 +260,7 @@ namespace RemuxOpt
 
                 // If it's a file path, extract the directory
                 if (Path.HasExtension(path))
-                { 
+                {
                     directoryPath = Path.GetDirectoryName(path)!;
                 }
 
@@ -285,7 +272,7 @@ namespace RemuxOpt
 
                 // Create the directory if it doesn't exist
                 if (!Directory.Exists(directoryPath))
-                { 
+                {
                     Directory.CreateDirectory(directoryPath);
                 }
             }
@@ -373,9 +360,10 @@ namespace RemuxOpt
             var columnName = _dataGridViewResults.Columns[e.ColumnIndex].Name;
             if (
                 !(columnName.StartsWith("Audio") && columnName.EndsWith("_Lang")) &&
+                !(columnName.StartsWith("Sub") && columnName.EndsWith("_Lang")) &&
                 columnName != "ExternalAudioLanguage"
             )
-            { 
+            {
                 return;
             }
 
@@ -391,13 +379,27 @@ namespace RemuxOpt
             }
             else
             {
-                var match = Regex.Match(columnName, @"Audio(\d+)_Lang");
-                if (!match.Success) return;
+                var audioMatch = Regex.Match(columnName, @"Audio(\d+)_Lang");
+                if (audioMatch.Success)
+                {
+                    int trackIndex = int.Parse(audioMatch.Groups[1].Value);
+                    if (trackIndex < file.AudioTracks.Count)
+                    {
+                        file.AudioTracks[trackIndex].Language = newValue;
+                    }
+                    return;
+                }
 
-                int trackIndex = int.Parse(match.Groups[1].Value);
-                if (trackIndex >= file.AudioTracks.Count) return;
-
-                file.AudioTracks[trackIndex].Language = newValue;
+                var subMatch = Regex.Match(columnName, @"Sub(\d+)_Lang");
+                if (subMatch.Success)
+                {
+                    int trackIndex = int.Parse(subMatch.Groups[1].Value);
+                    if (trackIndex < file.SubtitleTracks.Count)
+                    {
+                        file.SubtitleTracks[trackIndex].Language = newValue;
+                    }
+                    return;
+                }
             }
 
             row.Cells[e.ColumnIndex].Tag = "edited";
@@ -412,7 +414,10 @@ namespace RemuxOpt
             var column = _dataGridViewResults.Columns[e.ColumnIndex];
 
             // Only show for specific columns
-            if ((!column.Name.StartsWith("Audio") || !column.Name.EndsWith("_Lang")) && column.Name != "ExternalAudioLanguage")
+            if (
+                !(column.Name.StartsWith("Audio") && column.Name.EndsWith("_Lang")) &&
+                !(column.Name.StartsWith("Sub") && column.Name.EndsWith("_Lang")) &&
+                column.Name != "ExternalAudioLanguage")
             {
                 return;
             }
@@ -438,8 +443,8 @@ namespace RemuxOpt
                 {
                     return;
                 }
-                
-                UpdateFieldByColumnName(selectedFiles, addLanguageForm.SelectedLanguage.Abr3a);                    
+
+                UpdateFieldByColumnName(selectedFiles, addLanguageForm.SelectedLanguage.Abr3a);
             }
         }
 
@@ -447,7 +452,7 @@ namespace RemuxOpt
         {
             var dgv = sender as DataGridView;
             if (dgv == null || e.RowIndex < 0)
-            { 
+            {
                 return;
             }
 
@@ -507,11 +512,11 @@ namespace RemuxOpt
                     if (forcedCell?.Value != null)
                     {
                         if (forcedCell.Value is bool b)
-                        { 
+                        {
                             isForced = b;
                         }
                         else
-                        { 
+                        {
                             bool.TryParse(forcedCell.Value.ToString(), out isForced);
                         }
                     }
@@ -947,7 +952,7 @@ namespace RemuxOpt
                 }
 
                 for (var i = file.SubtitleTracks.Count; i < maxSubs; i++)
-                { 
+                {
                     row.Add("");        //language
                     row.Add("");        //title
                     row.Add("false");   //forced
@@ -986,7 +991,7 @@ namespace RemuxOpt
 
             var invalidRowCells = CountInvalidLanguageCodes();
             if (invalidRowCells.Count > 0)
-            { 
+            {
                 MsgBox.Show(this, $"{invalidRowCells.Count} files have audio tracks with unrecognized language codes!\n\nThe cells can be manually edited or a mass update option can be triggered by right clicking the columns headers.", "Validation Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 
                 //making the cells having issues editable
@@ -1005,7 +1010,7 @@ namespace RemuxOpt
             _dataGridViewResults.ResumeLayout();
 
             if (showFilePathColumn)
-            { 
+            {
                 RebuildRowColorMap();
             }
         }
@@ -1049,7 +1054,7 @@ namespace RemuxOpt
                         if (!string.IsNullOrEmpty(langValue) && !validCodes.Contains(langValue))
                         {
                             if (!result.ContainsKey(row.Index))
-                            { 
+                            {
                                 result[row.Index] = new List<int>();
                             }
 
@@ -1073,7 +1078,7 @@ namespace RemuxOpt
                 {
                     sb.AppendLine($"Path: {Path.GetDirectoryName(file.FileName)}");
                 }
-                
+
                 foreach (var audio in file.AudioTracks)
                 {
                     var channels = audio.Channels switch
@@ -1086,7 +1091,7 @@ namespace RemuxOpt
                     };
 
                     var bitrate = audio.BitRate.HasValue ? $"{audio.BitRate.Value / 1000} kbps" : "unknown bitrate";
-                    sb.AppendLine($"  Audio [{audio.Language}]: {channels} @ {bitrate}" + 
+                    sb.AppendLine($"  Audio [{audio.Language}]: {channels} @ {bitrate}" +
                         (string.IsNullOrEmpty(audio.Title) ? "" : $" - {audio.Title}"));
                 }
 
@@ -1228,6 +1233,9 @@ namespace RemuxOpt
             toolTip.SetToolTip(chkAutoTitleForAudioTrack, $"If checked, the title track is built from the track technical specs!{Environment.NewLine}{Environment.NewLine}<Language-name> <channels> @ <bitrate>");
             toolTip.SetToolTip(chkPreserveSubtitlesTrackTitles, "If checked, the 'Forced', 'SDH', 'CC' values will be preserved!");
             toolTip.SetToolTip(_dataGridViewResults, "Use SHIFT key modifier to scroll vertically using the mouse wheel!");
+            toolTip.SetToolTip(chkReadFilesRecursively, "When a folder is dragged onto the main form, and the above option is checked, all files from that folder and its subfolders are added to the processing list.\r\nA new column is added to the grid to display the full file path.\r\nThe output folder selection is disabled in this mode. Instead, remuxed files are saved in an \"Output\" subfolder within each original file's folder.\r\n");
+            toolTip.SetToolTip(chkRemoveUnlistedLanguageTracks, "Then checked, this option will remove from the original file all tracks that have a language code not present among those configured.\r\nIf unchecked, those traks will be moved at the end of the track list, unsorted.\r\n");
+            toolTip.SetToolTip(chkApplyNamingConventions, "Replace \" !\" with \"!\"");
         }
 
         #region ListViews Initialization and Event Handlers
@@ -1248,8 +1256,8 @@ namespace RemuxOpt
             const int delWidth = 50;
             listView.Columns.Add(string.Empty, delWidth, HorizontalAlignment.Center);
 
-            listView.Columns[0].Width = listView.ClientSize.Width - codeWidth - delWidth;
-
+            const int verticalScrollbarWidth = 17;
+            listView.Columns[0].Width = listView.ClientSize.Width - codeWidth - delWidth - verticalScrollbarWidth;
 
             listView.ItemDrag += LvGeneric_ItemDrag;
             listView.DragEnter += LvGeneric_DragEnter;
@@ -1343,7 +1351,7 @@ namespace RemuxOpt
             var listView = (ListView)sender;
 
             if (!e.Data.GetDataPresent(typeof(ListViewItem)))
-            { 
+            {
                 return;
             }
 
@@ -1411,7 +1419,6 @@ namespace RemuxOpt
             e.Effect = DragDropEffects.Move;
         }
 
-
         private void LvGeneric_MouseClick(object sender, MouseEventArgs e)
         {
             var serverLv = (ListView)sender;
@@ -1447,7 +1454,6 @@ namespace RemuxOpt
 
             var delItem = new ListViewSubItem(item, "✕")
             {
-                //Font = new Font(lvAudioTracks.Font, FontStyle.Bold)
             };
 
             if (isDefault)
@@ -1487,7 +1493,6 @@ namespace RemuxOpt
                 modalForm.StartPosition = FormStartPosition.CenterParent;
             }
         }
-
 
         private void LbAddLanguage_LinkClicked(object? sender, LinkLabelLinkClickedEventArgs e)
         {
@@ -1596,6 +1601,38 @@ namespace RemuxOpt
             );
 
             doc.Save("config.xml"); // Save near the EXE
+        }
+
+        private void InitOptions()
+        {
+            chkReadFilesRecursively.Checked = _appOptions.ReadFilesRecursively;
+            chkDeleteOriginal.Checked = _appOptions.DeleteOriginalsAfterSuccessfulRemux;
+            chkRemoveUnlistedLanguageTracks.Checked = _appOptions.RemoveUnlistedLanguageTracks;
+            chkApplyNamingConventions.Checked = _appOptions.ApplyNamingConventions;
+
+            chkReadFilesRecursively.CheckedChanged += (s, e) =>
+            {
+                _appOptions.ReadFilesRecursively = chkReadFilesRecursively.Checked;
+                _appOptions.SaveOptions();
+            };
+
+            chkDeleteOriginal.CheckedChanged += (s, e) =>
+            {
+                _appOptions.DeleteOriginalsAfterSuccessfulRemux = chkDeleteOriginal.Checked;
+                _appOptions.SaveOptions();
+            };
+
+            chkRemoveUnlistedLanguageTracks.CheckedChanged += (s, e) =>
+            {
+                _appOptions.RemoveUnlistedLanguageTracks = chkRemoveUnlistedLanguageTracks.Checked;
+                _appOptions.SaveOptions();
+            };
+
+            chkApplyNamingConventions.CheckedChanged += (s, e) =>
+            {
+                _appOptions.ApplyNamingConventions = chkApplyNamingConventions.Checked;
+                _appOptions.SaveOptions();
+            };
         }
 
         private List<MkvFileInfo> GetCheckedFilenames()
@@ -1828,7 +1865,7 @@ namespace RemuxOpt
                         sb.AppendLine("Remux completed successfully.");
 
                         if (!string.IsNullOrWhiteSpace(stdout))
-                        { 
+                        {
                             sb.AppendLine(stdout);
                         }
 
@@ -1840,7 +1877,7 @@ namespace RemuxOpt
 
                         if (_appOptions.ApplyNamingConventions)
                         {
-                            ApplyNamingConventions(mkvMA.outputFilePath, sb);                            
+                            ApplyNamingConventions(mkvMA.outputFilePath, sb);
                             MoveSourcesTxtFileToOutputFolder(currentFile.FilePath, mkvMA.outputFilePath, sb);
                         }
                     }
@@ -1891,7 +1928,7 @@ namespace RemuxOpt
         }
 
         private void MoveSourcesTxtFileToOutputFolder(string inputFilePath, string outputFilePath, StringBuilder sb)
-        {    
+        {
             try
             {
                 //move the "Video source.txt" file to "Output\source.txt"
